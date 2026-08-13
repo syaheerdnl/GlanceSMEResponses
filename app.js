@@ -148,6 +148,9 @@
     findingIndex: 0,
     currentGuess: null,
     correctCategory: null, // the "If you disagree, what is the correct category?" pick
+    revealedCategory: null, // the AI's own answer for the current finding — the
+                             // default "established" category until the participant
+                             // explicitly disagrees and picks a different one
     couldAlsoBeOrder: [], // array of category strings, in the order the user ranked them
     revealedFindings: {}  // findingNum -> category string, filled in only after that
                            // finding's guess has already been recorded server-side
@@ -580,6 +583,7 @@
     var finding = FINDINGS_PUBLIC[state.findingIndex];
     state.currentGuess = null;
     state.correctCategory = null;
+    state.revealedCategory = null;
     state.couldAlsoBeOrder = [];
 
     renderMiniProgress();
@@ -636,16 +640,21 @@
   }
 
   function renderCouldAlsoBeOptions() {
-    // The category just picked as "correct" can't also be a secondary
-    // "could also be" fit — drop it if it was ticked before this render.
-    if (state.correctCategory) {
-      state.couldAlsoBeOrder = state.couldAlsoBeOrder.filter(function (c) { return c !== state.correctCategory; });
+    // Whatever category currently counts as "the established answer" can't
+    // also be a secondary "could also be" fit. That's the participant's own
+    // correct-category pick once they've disagreed and chosen one — but
+    // until then (including simply agreeing "Yes"), it defaults to the AI's
+    // own revealed category, since ticking the exact answer you just agreed
+    // with as merely "also could be" is the same redundancy.
+    var excluded = state.correctCategory || state.revealedCategory;
+    if (excluded) {
+      state.couldAlsoBeOrder = state.couldAlsoBeOrder.filter(function (c) { return c !== excluded; });
     }
 
     var el = $('could-also-be-options');
     el.innerHTML = '';
     CATEGORIES.forEach(function (cat) {
-      if (cat === state.correctCategory) return; // already the stated correct answer, not a secondary option
+      if (cat === excluded) return; // already the established answer, not a secondary option
 
       var row = document.createElement('div');
       row.className = 'rank-row';
@@ -796,6 +805,7 @@
     // blind-reveal boundary.
     var finding = FINDINGS_PUBLIC[state.findingIndex];
     state.revealedFindings[finding.num] = data.category;
+    state.revealedCategory = data.category;
     renderCodeListing(finding.line);
     scrollToCurrentLine(finding.line);
 

@@ -167,6 +167,11 @@ assert((await page.textContent('#cve-finding-meta')).includes('Code Quality') &&
 assert(await page.locator('#finding-dot.revealed').count() === 1, 'finding dot marked revealed after the guess is submitted');
 assert(await page.locator('#code-listing .code-line.flagged').count() === 1, 'exactly one line now carries the revealed category color');
 assert(submitGuessCallCount[1] === 1, 'exactly one submitGuess POST sent for finding 1 so far');
+// The AI's own revealed category (Code Quality for finding 1) must not be
+// tickable as a redundant "could also be" option by default — this was a
+// real bug caught in live use: agreeing "Yes" left the AI's own answer
+// still selectable as its own secondary fit.
+assert(await page.locator('#could-also-be-options input[value="Code Quality"]').count() === 0, 'the AI\'s own revealed category is excluded from could-also-be by default, before any agreement is even picked');
 await shot('real-4-cve-after-reveal.png');
 
 // --- 5b. Resume the trickiest case: tab closes after submitGuess but before
@@ -184,16 +189,22 @@ assert(await page.locator('#finding-dot.revealed').count() === 1, 'finding dot s
 assert(await page.locator('#code-listing .code-line.flagged').count() === 1, 'code panel still shows the revealed line colored after resume');
 assert(submitGuessCallCount[1] === 1, 'resuming did NOT re-POST submitGuess for finding 1 (still exactly one call)');
 
-// --- 5c. Agreement UX: "correct category" only shows on "No", and whatever
-// is picked there is excluded from "could also be" (redundant otherwise). ---
+// --- 5c. Agreement UX: "correct category" only shows on "No", and whichever
+// category currently counts as "the established answer" is excluded from
+// "could also be" — the AI's own revealed category by default (Code Quality
+// for finding 1), switching to the participant's own pick once they
+// disagree and choose one, and back again once they don't. ---
 assert(await page.locator('#disagree-block:not(.hidden)').count() === 0, 'disagree-block hidden by default right after reveal');
 await page.click('#agreement-yesno .radio-option >> nth=1'); // "No"
 assert(await page.locator('#disagree-block:not(.hidden)').count() === 1, 'disagree-block shows after picking "No"');
+assert(await page.locator('#could-also-be-options input[value="Code Quality"]').count() === 0, 'AI\'s category (Code Quality) still excluded after "No" alone, before picking a correct category');
 await page.click('#correct-category-options .radio-option:has-text("Bugs")');
-assert(await page.locator('#could-also-be-options input[value="Bugs"]').count() === 0, 'the chosen correct category is excluded from could-also-be options');
+assert(await page.locator('#could-also-be-options input[value="Bugs"]').count() === 0, 'the chosen correct category (Bugs) is now excluded from could-also-be options');
+assert(await page.locator('#could-also-be-options input[value="Code Quality"]').count() === 1, 'Code Quality becomes available again once a different correct category is chosen');
 await page.click('#agreement-yesno .radio-option >> nth=0'); // back to "Yes"
 assert(await page.locator('#disagree-block:not(.hidden)').count() === 0, 'disagree-block hides again after switching back to "Yes"');
-assert(await page.locator('#could-also-be-options input[value="Bugs"]').count() === 1, 'could-also-be options restore once correct-category is cleared');
+assert(await page.locator('#could-also-be-options input[value="Bugs"]').count() === 1, 'Bugs becomes available again once correct-category is cleared');
+assert(await page.locator('#could-also-be-options input[value="Code Quality"]').count() === 0, 'exclusion reverts back to the AI\'s own category (Code Quality) after switching back to "Yes"');
 
 // --- 6. Walk through all 6 findings ---
 for (let i = 0; i < 6; i++) {
