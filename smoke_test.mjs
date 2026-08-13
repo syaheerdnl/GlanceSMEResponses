@@ -58,14 +58,14 @@ const RESEARCHER_DASHBOARD = {
   generatedAt: '2026-08-13T12:00:00.000Z',
   participants: [
     {
-      participantId: 'SME-10', studyPath: 'full_sme', createdAt: '2026-08-13T09:00:00.000Z',
+      participantId: 'SME-10', participantName: 'Aisha Rahman', studyPath: 'full_sme', createdAt: '2026-08-13T09:00:00.000Z',
       yearsExperience: '8 years', platforms: 'Android, Kotlin', role: 'Mobile Engineer', consentedAt: '2026-08-13T09:01:00.000Z',
       sus1: 4, sus2: 2, sus3: 4, sus4: 2, sus5: 4, sus6: 2, sus7: 4, sus8: 2, sus9: 4, sus10: 2, susScore: 75,
       sampleId: 'mysejahtera-alpha-dart-v1', openedAt: '2026-08-13T09:05:00.000Z', reviewCompletedAt: '2026-08-13T09:06:00.000Z', feedbackOpenedAt: '2026-08-13T09:07:00.000Z', fixAppliedAt: '2026-08-13T09:08:00.000Z'
     },
     {
-      participantId: 'SME-11', studyPath: 'sus_only', createdAt: '2026-08-13T10:00:00.000Z',
-      yearsExperience: null, platforms: null, role: null, consentedAt: '2026-08-13T10:01:00.000Z',
+      participantId: 'SME-11', participantName: 'Farid Omar', studyPath: 'sus_only', createdAt: '2026-08-13T10:00:00.000Z',
+      yearsExperience: '3 years', platforms: 'Dart, Flutter', role: 'Mobile Developer', consentedAt: '2026-08-13T10:01:00.000Z',
       sus1: 5, sus2: 1, sus3: 5, sus4: 1, sus5: 5, sus6: 1, sus7: 5, sus8: 1, sus9: 5, sus10: 1, susScore: 100,
       sampleId: 'mysejahtera-alpha-dart-v1', openedAt: '2026-08-13T10:05:00.000Z', reviewCompletedAt: '2026-08-13T10:06:00.000Z', feedbackOpenedAt: '2026-08-13T10:07:00.000Z', fixAppliedAt: '2026-08-13T10:08:00.000Z'
     }
@@ -82,6 +82,8 @@ const RESEARCHER_DASHBOARD = {
 var submitGuessCallCount = {}; // findingNum -> count, so the resume test can prove no duplicate POST
 var assignIdCallCount = 0; // proves the Back-to-Intake guard doesn't mint a second participant ID
 var assignSusOnlyIdCallCount = 0;
+var lastAssignIdPayload = null;
+var lastAssignSusOnlyPayload = null;
 var saveConsentCallCount = 0;
 var lastConsentPayload = null;
 var handsOnMilestoneCallCount = {}; // milestone -> count; the task RPC must be idempotent client-side too
@@ -137,6 +139,8 @@ await page.route('**/rest/v1/rpc/*', async (route) => {
   switch (fnName) {
     case 'assign_id':
       assignIdCallCount++;
+      lastAssignIdPayload = body;
+      assert(body.p_participant_name === 'Jane Doe', 'full-SME assignment records the participant name in its protected field');
       // Real assign_id always mints a fresh SME-N — a second call would be
       // SME-2. Returning that here (rather than hardcoding SME-1) means the
       // app.js guard against re-submitting Intake is actually exercised,
@@ -144,7 +148,8 @@ await page.route('**/rest/v1/rpc/*', async (route) => {
       resp = { ok: true, id: 'SME-' + assignIdCallCount };
       break;
     case 'assign_sus_only_id':
-      assert(Object.keys(body).length === 0, 'SUS-only assignment RPC receives no browser code or participant data');
+      assert(!Object.prototype.hasOwnProperty.call(body, 'p_access_code'), 'SUS-only assignment never sends the browser-only SME access code');
+      lastAssignSusOnlyPayload = body;
       assignSusOnlyIdCallCount++;
       // Both assignment RPCs share the same identity-backed SME-N sequence.
       resp = { ok: true, id: 'SME-' + (assignIdCallCount + assignSusOnlyIdCallCount) };
@@ -266,7 +271,9 @@ await page.waitForSelector('#section-demo.active');
 await page.waitForTimeout(350);
 assert((await page.textContent('#id-badge-demo')).trim() === 'SME-1', 'assigned ID SME-1 shown after intake, on the Demo section');
 assert(saveConsentCallCount === 1, 'explicit consent is recorded exactly once after the anonymous participant ID is assigned');
-assert(lastConsentPayload.p_id === 'SME-1' && lastConsentPayload.p_accepted === true && lastConsentPayload.p_consent_version === 'sme-web-consent-v1', 'consent RPC stores only the participant ID, true acceptance, and the form version');
+assert(lastAssignIdPayload.p_years_experience === '8 years' && lastAssignIdPayload.p_platforms.includes('Dart') && lastAssignIdPayload.p_role === 'Senior Mobile Engineer', 'full-SME assignment records the shared professional background');
+assert(lastConsentPayload.p_id === 'SME-1' && lastConsentPayload.p_accepted === true && lastConsentPayload.p_consent_version === 'sme-web-consent-v2', 'consent RPC stores only the participant ID, true acceptance, and the current form version');
+assert(!(await page.evaluate(() => localStorage.getItem('smeSession_v1'))).includes('Jane Doe'), 'participant name is not retained in the browser recovery session');
 await shot('real-2-demo.png');
 
 // --- 2b. Back-button chain: Demo -> Intake -> (Continue again) -> Demo,
@@ -511,24 +518,33 @@ await page.waitForTimeout(200);
 assert(await page.locator('#resume-banner:not(.hidden)').count() === 0, 'no resume banner after a completed run (session was cleared)');
 assert(await page.locator('#section-cover.active').count() === 1, 'a completed run reloads fresh at the study cover, not back at Done');
 
-// --- 8. SUS-only route: no code creates a distinct anonymous record, skips
-// SME-only sections, still completes the real hands-on step before SUS. ---
+// --- 8. SUS-only route: no code selects the shorter route, but it still
+// completes the shared Background screen before the hands-on task and SUS. ---
 await page.click('#btn-cover-start');
 await page.waitForSelector('#section-consent.active');
 await page.check('#consent-agree');
 await page.click('#btn-consent-continue');
 await page.waitForSelector('#section-access.active');
 await page.click('#btn-access-sus');
+await page.waitForSelector('#section-intake.active');
+assert(await page.locator('.step[data-step="intake"].current').count() === 1, 'SUS-only route begins with the same Background step');
+assert(await page.locator('.step[data-step="interview"].hidden').count() === 1, 'SUS-only stepper hides Interview');
+assert(await page.locator('.step[data-step="cve"].hidden').count() === 1, 'SUS-only stepper hides Category Check');
+assert((await page.locator('.step:not(.hidden)').count()) === 5, 'SUS-only stepper contains Background, Demo, Hands-on, SUS, and Done');
+await page.fill('#in-name', 'SUS Test Participant');
+await page.fill('#in-years-slider', '3');
+await page.dispatchEvent('#in-years-slider', 'input');
+await page.click('#platform-chips .chip:has-text("Dart")');
+await page.click('#platform-chips .chip:has-text("Flutter")');
+await page.fill('#in-role', 'Mobile Developer');
+await page.click('#btn-intake-submit');
 await page.waitForSelector('#section-demo.active');
 assert(assignSusOnlyIdCallCount === 1, 'SUS-only route calls its narrow ID-assignment RPC exactly once');
 assert(saveConsentCallCount === 2, 'SUS-only participant consent is recorded after the anonymous ID is assigned');
 assert(lastConsentPayload.p_id === 'SME-2', 'SUS-only consent is linked to the next anonymous SME-N ID');
+assert(lastAssignSusOnlyPayload.p_participant_name === 'SUS Test Participant' && lastAssignSusOnlyPayload.p_years_experience === '3 years' && lastAssignSusOnlyPayload.p_platforms.includes('Flutter') && lastAssignSusOnlyPayload.p_role === 'Mobile Developer', 'SUS-only assignment saves the same name and background fields as the full SME route');
 assert((await page.textContent('#id-badge-demo')).trim() === 'SME-2', 'SUS-only route displays its assigned anonymous ID');
 assert((await page.textContent('#demo-help')).includes('guided hands-on task'), 'SUS-only demo explains its shorter route');
-assert(await page.locator('.step[data-step="intake"].hidden').count() === 1, 'SUS-only stepper hides Background');
-assert(await page.locator('.step[data-step="interview"].hidden').count() === 1, 'SUS-only stepper hides Interview');
-assert(await page.locator('.step[data-step="cve"].hidden').count() === 1, 'SUS-only stepper hides Category Check');
-assert((await page.locator('.step:not(.hidden)').count()) === 4, 'SUS-only stepper contains only Demo, Hands-on, SUS, and Done');
 
 // A reload keeps the same path and participant ID rather than minting another.
 await page.reload();
@@ -569,6 +585,7 @@ assert((await page.textContent('#metric-participants')).trim() === '2', 'researc
 assert((await page.textContent('#metric-sus')).trim() === '87.5', 'researcher dashboard calculates the mean SUS score');
 assert((await page.textContent('#researcher-cve-overall')).includes('50%'), 'researcher dashboard calculates the blind category match rate');
 assert(await page.locator('#researcher-participant-rows tr').count() === 2, 'researcher dashboard shows anonymous participant overview rows');
+assert((await page.textContent('#researcher-participant-rows')).includes('Aisha Rahman') && (await page.textContent('#researcher-participant-rows')).includes('Farid Omar'), 'researcher dashboard alone shows the separately protected participant names');
 assert(!page.url().includes('researcher-access-token'), 'magic-link access token is removed from the URL after being handled');
 await shot('real-7-researcher-dashboard.png');
 await page.selectOption('#researcher-route-filter', 'sus_only');

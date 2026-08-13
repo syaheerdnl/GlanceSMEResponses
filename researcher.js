@@ -119,7 +119,19 @@
 
   function csvCell(value) {
     var text = value === null || value === undefined ? '' : String(value);
+    // Prevent a participant-provided value being interpreted as a formula if
+    // a downloaded CSV is opened in spreadsheet software.
+    if (/^[=+\-@]/.test(text)) text = "'" + text;
     return '"' + text.replace(/"/g, '""') + '"';
+  }
+
+  function escapeHtml(value) {
+    return String(value === null || value === undefined ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function downloadCsv(filename, headers, rows) {
@@ -199,7 +211,8 @@
     $('researcher-no-participants').classList.toggle('hidden', participants.length > 0);
     $('researcher-participant-rows').innerHTML = participants.map(function (participant) {
       return '<tr>' +
-        '<td>' + participant.participantId + '</td>' +
+        '<td>' + escapeHtml(participant.participantName || 'Not recorded') + '</td>' +
+        '<td>' + escapeHtml(participant.participantId) + '</td>' +
         '<td>' + (participant.studyPath === 'full_sme' ? 'Full SME' : 'SUS-only') + '</td>' +
         '<td>' + formatScore(participant.susScore) + '</td>' +
         '<td>' + (participant.fixAppliedAt ? 'Completed' : 'Not completed') + '</td>' +
@@ -217,7 +230,7 @@
 
   function participantRows() {
     return filteredParticipants().map(function (p) {
-      return [p.participantId, p.studyPath, p.createdAt, p.yearsExperience, p.platforms, p.role, p.consentedAt, p.susScore, p.openedAt, p.reviewCompletedAt, p.feedbackOpenedAt, p.fixAppliedAt];
+      return [p.participantName, p.participantId, p.studyPath, p.createdAt, p.yearsExperience, p.platforms, p.role, p.consentedAt, p.susScore, p.openedAt, p.reviewCompletedAt, p.feedbackOpenedAt, p.fixAppliedAt];
     });
   }
 
@@ -247,7 +260,7 @@
 
   function initExports() {
     $('btn-export-participants').addEventListener('click', function () {
-      downloadCsv('glance-participants.csv', ['participant_id', 'study_path', 'created_at', 'years_experience', 'platforms', 'role', 'consented_at', 'sus_score', 'opened_at', 'review_completed_at', 'feedback_opened_at', 'fix_applied_at'], participantRows());
+      downloadCsv('glance-participants.csv', ['participant_name', 'participant_id', 'study_path', 'created_at', 'years_experience', 'platforms', 'role', 'consented_at', 'sus_score', 'opened_at', 'review_completed_at', 'feedback_opened_at', 'fix_applied_at'], participantRows());
     });
     $('btn-export-sus').addEventListener('click', function () {
       downloadCsv('glance-sus.csv', ['participant_id', 'study_path', 'sus1', 'sus2', 'sus3', 'sus4', 'sus5', 'sus6', 'sus7', 'sus8', 'sus9', 'sus10', 'sus_score'], susRows());

@@ -141,10 +141,10 @@
 
   var FULL_SME_ACCESS_CODE = '0811';
   var FULL_SME_STEPS = ['intake', 'demo', 'interview', 'cve', 'prototype', 'sus', 'done'];
-  var SUS_ONLY_STEPS = ['demo', 'prototype', 'sus', 'done'];
+  var SUS_ONLY_STEPS = ['intake', 'demo', 'prototype', 'sus', 'done'];
   var PROTOTYPE_SAMPLE_ID = 'mysejahtera-alpha-dart-v1';
   var PROTOTYPE_MILESTONES = ['opened', 'review-completed', 'feedback-opened', 'fix-applied'];
-  var CONSENT_VERSION = 'sme-web-consent-v1';
+  var CONSENT_VERSION = 'sme-web-consent-v2';
 
   // ---- State (live, in-memory) ----
 
@@ -394,8 +394,8 @@
   // Code.gs returned.
 
   var ACTION_MAP = {
-    assignId:        { fn: 'assign_id',        params: { yearsExperience: 'p_years_experience', platforms: 'p_platforms', role: 'p_role' } },
-    assignSusOnlyId: { fn: 'assign_sus_only_id', params: {} },
+    assignId:        { fn: 'assign_id',        params: { yearsExperience: 'p_years_experience', platforms: 'p_platforms', role: 'p_role', participantName: 'p_participant_name' } },
+    assignSusOnlyId: { fn: 'assign_sus_only_id', params: { yearsExperience: 'p_years_experience', platforms: 'p_platforms', role: 'p_role', participantName: 'p_participant_name' } },
     saveConsent:     { fn: 'save_consent',     params: { id: 'p_id', accepted: 'p_accepted', version: 'p_consent_version' } },
     saveInterview:   { fn: 'save_interview',   params: { id: 'p_id', q2: 'p_q2', q3: 'p_q3', q4: 'p_q4', q5: 'p_q5', q6: 'p_q6' } },
     submitGuess:     { fn: 'submit_guess',     params: { id: 'p_id', findingNum: 'p_finding_num', guess: 'p_guess' } },
@@ -461,9 +461,9 @@
   }
 
   // ---- Participant consent ----
-  // Consent is read before Intake, then written against the anonymous
-  // participant ID immediately after assign_id succeeds. No name or other
-  // participant-entered answer is included in the consent RPC.
+  // Consent is read before Intake, then written against the participant ID
+  // immediately after assignment succeeds. The recorded form version proves
+  // the participant saw the current notice about the separately held name.
 
   function saveConsentRecord() {
     if (!state.participantId || !session.consent.accepted) {
@@ -505,9 +505,9 @@
       session.consent.saved = false;
       session.consent.version = CONSENT_VERSION;
       // There is no participant ID yet during a new session, so this page
-      // does not write a record prematurely. The next screen selects either
-      // the full SME path (where Intake creates the ID) or the SUS-only path
-      // (where its narrow assignment RPC creates it), then consent is saved.
+      // does not write a record prematurely. The next screen selects the
+      // study path, then the shared Background screen creates the ID and
+      // records consent.
       if (!state.participantId) {
         showSection('section-access');
         return;
@@ -532,17 +532,18 @@
   //
   // This browser-only code is intentionally a researcher-supervised route
   // selector, not a security boundary. It selects the full SME instrument;
-  // continuing without it creates a distinct SUS-only participant record.
+  // continuing without it selects the SUS-only instrument. Both paths then
+  // complete the same participant background screen.
 
   function renderAccessGate() {
     var susOnlyLocked = session.studyPath === 'sus_only' && !!state.participantId;
     $('access-title').textContent = susOnlyLocked ? 'Usability session selected' : 'Study access';
     $('access-summary').textContent = susOnlyLocked
       ? 'This participant is assigned to the usability session. Continue to the demonstration when ready.'
-      : 'If the researcher gave you an SME access code, enter it to continue with the full SME session. Otherwise, continue to the usability session.';
+      : 'If the researcher gave you an SME access code, enter it to continue with the full SME session. Otherwise, continue to the usability session. Both paths include the same participant background check.';
     $('access-code-block').classList.toggle('hidden', susOnlyLocked);
     $('btn-access-sme').classList.toggle('hidden', susOnlyLocked);
-    $('btn-access-sus').textContent = susOnlyLocked ? 'Return to demonstration' : 'Continue to usability session';
+    $('btn-access-sus').textContent = susOnlyLocked ? 'Return to demonstration' : 'Continue to background check';
     if (!susOnlyLocked) $('access-code').value = '';
     clearError('access-error');
   }
@@ -557,25 +558,10 @@
     }
 
     session.studyPath = 'sus_only';
-    return callBackend('assignSusOnlyId', {})
-      .then(function (data) {
-        state.participantId = data.id;
-        setBadges(data.id);
-        session.participantId = data.id;
-        // Persist the ID before the consent RPC so a reload after a network
-        // interruption retries consent instead of minting another SME-N.
-        session.section = 'access';
-        saveSession();
-        return saveConsentRecord();
-      })
-      .then(enterDemoAfterConsent)
-      .catch(function (err) {
-        // If assignment itself failed, leave the selector usable. Once an ID
-        // exists, retain the selected path so the idempotent consent retry is
-        // the only possible follow-up action.
-        if (!state.participantId) session.studyPath = null;
-        throw err;
-      });
+    session.section = 'intake';
+    saveSession();
+    showSection('section-intake');
+    return Promise.resolve();
   }
 
   function initAccessGate() {
@@ -595,7 +581,7 @@
       clearError('access-error');
       var btn = $('btn-access-sus');
       btn.disabled = true;
-      btn.textContent = state.participantId ? 'Continuing…' : 'Preparing…';
+      btn.textContent = 'Continuing…';
       continueSusOnlySession()
         .catch(function (err) {
           showError('access-error', 'Could not prepare this usability session: ' + err.message);
@@ -671,6 +657,7 @@
         return;
       }
 
+      var participantName = $('in-name').value.trim();
       var years = cap.checked ? '20+ years' : (Number(slider.value) === 0 ? 'less than 1 year' : slider.value + ' years');
 
       var selectedChips = Array.prototype.slice
@@ -681,6 +668,10 @@
 
       var role = $('in-role').value.trim();
 
+      if (!participantName) {
+        showError('intake-error', 'Please enter the participant name for the study record.');
+        return;
+      }
       if (!platforms) {
         showError('intake-error', 'Pick at least one platform/language, or fill in "Other".');
         return;
@@ -693,7 +684,8 @@
       var btn = $('btn-intake-submit');
       btn.disabled = true;
       btn.textContent = 'Saving…';
-      callBackend('assignId', { yearsExperience: years, platforms: platforms, role: role })
+      var assignmentAction = session.studyPath === 'sus_only' ? 'assignSusOnlyId' : 'assignId';
+      callBackend(assignmentAction, { participantName: participantName, yearsExperience: years, platforms: platforms, role: role })
         .then(function (data) {
           state.participantId = data.id;
           setBadges(data.id);
@@ -732,9 +724,9 @@
 
   function initDemo() {
     $('btn-demo-back').addEventListener('click', function () {
-      session.section = session.studyPath === 'sus_only' ? 'access' : 'intake';
+      session.section = 'intake';
       saveSession();
-      showSection(session.studyPath === 'sus_only' ? 'section-access' : 'section-intake');
+      showSection('section-intake');
     });
 
     $('btn-demo-continue').addEventListener('click', function () {
@@ -1385,7 +1377,7 @@
         saveSession();
         showSection('section-consent');
       } else if (session.studyPath === 'sus_only' &&
-                 (session.section === 'intake' || session.section === 'interview' || session.section === 'cve')) {
+                 (session.section === 'interview' || session.section === 'cve')) {
         // A SUS-only participant has no normal UI route to these SME-only
         // sections. If an old/stale browser session claims otherwise, recover
         // to the first valid step rather than showing incomplete study data.

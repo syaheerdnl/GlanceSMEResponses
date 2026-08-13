@@ -39,8 +39,18 @@ create table public.intake (
   constraint intake_participant_code_unique unique (participant_code)
 );
 
--- Consent is kept separate from Intake so it can record the exact form
--- version and timestamp without storing the participant's on-screen name.
+-- Identity details are intentionally held separately from the background and
+-- response tables. The researcher dashboard can join this one table when a
+-- name is needed for session records, while thesis analysis can use only the
+-- pseudonymous participant_code in the other tables.
+create table public.participant_identity (
+  participant_id   text primary key references public.intake (participant_code),
+  participant_name text not null check (btrim(participant_name) <> ''),
+  created_at       timestamptz not null default now()
+);
+
+-- Consent is kept separate so it can record the exact form version and
+-- timestamp independently from identity and study responses.
 create table public.consent (
   id              bigint generated always as identity primary key,
   participant_id  text not null references public.intake (participant_code),
@@ -152,6 +162,7 @@ insert into public.findings (num, line, title, category, explanation) values
 -- ============================================================
 
 alter table public.intake               enable row level security;
+alter table public.participant_identity enable row level security;
 alter table public.consent              enable row level security;
 alter table public.interview            enable row level security;
 alter table public.category_validation  enable row level security;
@@ -160,7 +171,7 @@ alter table public.hands_on_task         enable row level security;
 alter table public.findings             enable row level security;
 alter table public.researcher_access    enable row level security;
 
-revoke all on public.intake, public.consent, public.interview, public.category_validation,
+revoke all on public.intake, public.participant_identity, public.consent, public.interview, public.category_validation,
                 public.sus, public.hands_on_task, public.findings, public.researcher_access
   from anon, authenticated;
 
@@ -216,33 +227,44 @@ for each row execute function public.require_recorded_consent();
 -- ============================================================
 
 create or replace function public.assign_id(
-  p_years_experience text, p_platforms text, p_role text
+  p_years_experience text, p_platforms text, p_role text, p_participant_name text
 ) returns jsonb language plpgsql security definer set search_path = '' as $$
 declare v_code text;
 begin
+  if coalesce(btrim(p_participant_name), '') = '' then
+    return jsonb_build_object('ok', false, 'error', 'Participant name is required.');
+  end if;
   insert into public.intake (years_experience, platforms, role, study_path)
   values (p_years_experience, p_platforms, p_role, 'full_sme')
   returning participant_code into v_code;
+  insert into public.participant_identity (participant_id, participant_name)
+  values (v_code, btrim(p_participant_name));
   return jsonb_build_object('ok', true, 'id', v_code);
 end; $$;
-revoke all on function public.assign_id(text, text, text) from public;
-grant execute on function public.assign_id(text, text, text) to anon;
+revoke all on function public.assign_id(text, text, text, text) from public;
+grant execute on function public.assign_id(text, text, text, text) to anon;
 
--- The browser code only selects a supervised study route. This separate,
--- intentionally narrow RPC mints an otherwise-empty intake row for a
--- SUS-only participant, so it receives the same anonymous SME-N convention
--- without collecting SME-only background data.
-create or replace function public.assign_sus_only_id()
+-- The browser code only selects a supervised study route. The SUS-only route
+-- records the same participant background, while still skipping the SME-only
+-- interview and Category Validation Exercise.
+create or replace function public.assign_sus_only_id(
+  p_years_experience text, p_platforms text, p_role text, p_participant_name text
+)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare v_code text;
 begin
-  insert into public.intake (study_path)
-  values ('sus_only')
+  if coalesce(btrim(p_participant_name), '') = '' then
+    return jsonb_build_object('ok', false, 'error', 'Participant name is required.');
+  end if;
+  insert into public.intake (years_experience, platforms, role, study_path)
+  values (p_years_experience, p_platforms, p_role, 'sus_only')
   returning participant_code into v_code;
+  insert into public.participant_identity (participant_id, participant_name)
+  values (v_code, btrim(p_participant_name));
   return jsonb_build_object('ok', true, 'id', v_code);
 end; $$;
-revoke all on function public.assign_sus_only_id() from public;
-grant execute on function public.assign_sus_only_id() to anon;
+revoke all on function public.assign_sus_only_id(text, text, text, text) from public;
+grant execute on function public.assign_sus_only_id(text, text, text, text) to anon;
 
 
 -- Consent must be explicitly true and match the deployed form version. The
@@ -259,7 +281,7 @@ begin
   if p_accepted is distinct from true then
     return jsonb_build_object('ok', false, 'error', 'Explicit consent is required.');
   end if;
-  if p_consent_version is distinct from 'sme-web-consent-v1' then
+  if p_consent_version is distinct from 'sme-web-consent-v2' then
     return jsonb_build_object('ok', false, 'error', 'Unexpected consent form version.');
   end if;
 
@@ -479,6 +501,7 @@ begin
     'participants', (
       select coalesce(jsonb_agg(jsonb_build_object(
         'participantId', i.participant_code,
+        'participantName', pi.participant_name,
         'studyPath', i.study_path,
         'createdAt', i.created_at,
         'yearsExperience', i.years_experience,
@@ -495,6 +518,7 @@ begin
         'fixAppliedAt', h.fix_applied_at
       ) order by i.id), '[]'::jsonb)
       from public.intake i
+      left join public.participant_identity pi on pi.participant_id = i.participant_code
       left join public.consent c on c.participant_id = i.participant_code
       left join public.sus s on s.participant_id = i.participant_code
       left join public.hands_on_task h on h.participant_id = i.participant_code
@@ -538,6 +562,6 @@ grant execute on function public.researcher_dashboard() to authenticated;
 --     -> should return [] or a 401/403, NOT the 6 findings.
 --   curl -X POST "<project-url>/rest/v1/rpc/assign_id" \
 --     -H "apikey: <anon-key>" -H "Content-Type: application/json" \
---     -d '{"p_years_experience":"5","p_platforms":"Dart","p_role":"Test"}'
+--     -d '{"p_years_experience":"5 years","p_platforms":"Dart","p_role":"Test","p_participant_name":"Test participant"}'
 --     -> should return {"ok":true,"id":"SME-1"} (or the next number).
 -- ============================================================

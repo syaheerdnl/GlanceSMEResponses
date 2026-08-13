@@ -53,7 +53,7 @@
 
       <div class="start-panel">
         <h3>Before you start</h3>
-        <p>Your participant profile is assigned anonymously after the next page. No response is saved on this page.</p>
+        <p>Your study record receives a participant ID after the next pages. No response is saved on this page.</p>
       </div>
 
       <button id="btn-cover-start" class="start-button">Start study session</button>
@@ -70,10 +70,10 @@
 
       <div class="consent-summary">
         <h3>Purpose and activities</h3>
-        <p>This study evaluates Glance, a mobile AI-assisted code review application for Dart and Kotlin. Every session includes a demonstration, one guided hands-on task, and the System Usability Scale questionnaire. An invited SME session also includes background, interview, and category-validation questions.</p>
+        <p>This study evaluates Glance, a mobile AI-assisted code review application for Dart and Kotlin. Every session includes a background check, demonstration, one guided hands-on task, and the System Usability Scale questionnaire. An invited SME session also includes interview and category-validation questions.</p>
 
         <h3>What is recorded</h3>
-        <p>The responses relevant to your assigned session, including hands-on task milestone timestamps and SUS answers, will be recorded under an anonymous participant ID. Invited SME sessions also record professional background, interview, and category-validation answers. Your name is used only on screen to confirm an interview participant and is not saved in the study database.</p>
+        <p>Your name and professional background will be recorded for the study record, together with a participant ID. Session responses, including hands-on task milestone timestamps and SUS answers, are recorded under that ID. Invited SME sessions also record interview and category-validation answers. Your name is held separately from response data and is visible only in the protected researcher dashboard.</p>
 
         <h3>Your choice</h3>
         <p>Taking part is voluntary. You may ask to pause or stop before submitting an answer. The application is being evaluated, not your professional performance.</p>
@@ -83,7 +83,7 @@
         <input type="checkbox" id="consent-agree">
         I have read the information above, had the opportunity to ask questions, and voluntarily agree to take part in this study.
       </label>
-      <p class="help">Consent version: SME-web-consent-v1. The consent timestamp and version are recorded after your anonymous Participant ID is assigned.</p>
+      <p class="help">Consent version: SME-web-consent-v2. The consent timestamp and version are recorded after your Participant ID is assigned.</p>
 
       <div id="consent-error" class="error hidden" role="alert"></div>
       <div id="consent-declined" class="status hidden">No response has been saved. You may close this page or speak with the researcher.</div>
@@ -99,7 +99,7 @@
     <div class="card access-card">
       <p class="pill">Session selection</p>
       <h2 id="access-title">Study access</h2>
-      <p id="access-summary">If the researcher gave you an SME access code, enter it to continue with the full SME session. Otherwise, continue to the usability session.</p>
+      <p id="access-summary">If the researcher gave you an SME access code, enter it to continue with the full SME session. Otherwise, continue to the usability session. Both sessions begin with the same participant background check.</p>
 
       <div id="access-code-block">
         <label for="access-code">SME access code</label>
@@ -118,10 +118,10 @@
   <!-- ============ SECTION 0: INTAKE ============ -->
   <section id="section-intake" class="section">
     <div class="card">
-      <h2>Before we start</h2>
-      <p class="help">Your name is used only to confirm who is being interviewed and is never saved. Once you submit, you will be assigned an anonymous Participant ID (e.g. SME-1) that is used for every answer after this.</p>
+      <h2>Participant background</h2>
+      <p class="help">This background check is completed for every participant. Your name is kept separately from the response data for the study record. Once you submit, you will receive a Participant ID (for example, SME-1) used for the session responses.</p>
 
-      <label for="in-name">Name</label>
+      <label for="in-name">Participant name</label>
       <input type="text" id="in-name" autocomplete="off">
 
       <label for="in-years">Years of professional experience in mobile development</label>
