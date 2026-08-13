@@ -144,7 +144,7 @@
   var SUS_ONLY_STEPS = ['intake', 'demo', 'prototype', 'sus', 'done'];
   var PROTOTYPE_SAMPLE_ID = 'mysejahtera-alpha-dart-v1';
   var PROTOTYPE_MILESTONES = ['opened', 'review-completed', 'feedback-opened', 'fix-applied'];
-  var CONSENT_VERSION = 'sme-web-consent-v2';
+  var CONSENT_VERSION = 'sme-web-consent-v3';
 
   // ---- State (live, in-memory) ----
 
@@ -250,6 +250,7 @@
     $('stepper').classList.toggle('hidden', isPreIntake);
     if (!isPreIntake) updateStepper(id.replace('section-', ''));
     if (id === 'section-access') renderAccessGate();
+    if (id === 'section-intake') renderIntakeRoute();
     if (id === 'section-demo') renderDemoRoute();
   }
 
@@ -395,7 +396,7 @@
 
   var ACTION_MAP = {
     assignId:        { fn: 'assign_id',        params: { yearsExperience: 'p_years_experience', platforms: 'p_platforms', role: 'p_role', participantName: 'p_participant_name' } },
-    assignSusOnlyId: { fn: 'assign_sus_only_id', params: { yearsExperience: 'p_years_experience', platforms: 'p_platforms', role: 'p_role', participantName: 'p_participant_name' } },
+    assignSusOnlyId: { fn: 'assign_sus_only_id', params: { participantName: 'p_participant_name', languageFamiliarity: 'p_language_familiarity' } },
     saveConsent:     { fn: 'save_consent',     params: { id: 'p_id', accepted: 'p_accepted', version: 'p_consent_version' } },
     saveInterview:   { fn: 'save_interview',   params: { id: 'p_id', q2: 'p_q2', q3: 'p_q3', q4: 'p_q4', q5: 'p_q5', q6: 'p_q6' } },
     submitGuess:     { fn: 'submit_guess',     params: { id: 'p_id', findingNum: 'p_finding_num', guess: 'p_guess' } },
@@ -533,14 +534,14 @@
   // This browser-only code is intentionally a researcher-supervised route
   // selector, not a security boundary. It selects the full SME instrument;
   // continuing without it selects the SUS-only instrument. Both paths then
-  // complete the same participant background screen.
+  // complete a short background screen tailored to their study route.
 
   function renderAccessGate() {
     var susOnlyLocked = session.studyPath === 'sus_only' && !!state.participantId;
     $('access-title').textContent = susOnlyLocked ? 'Usability session selected' : 'Study access';
     $('access-summary').textContent = susOnlyLocked
       ? 'This participant is assigned to the usability session. Continue to the demonstration when ready.'
-      : 'If the researcher gave you an SME access code, enter it to continue with the full SME session. Otherwise, continue to the usability session. Both paths include the same participant background check.';
+      : 'If the researcher gave you an SME access code, enter it to continue with the full SME session. Otherwise, continue to the usability session. Both paths include a short background check tailored to the study route.';
     $('access-code-block').classList.toggle('hidden', susOnlyLocked);
     $('btn-access-sme').classList.toggle('hidden', susOnlyLocked);
     $('btn-access-sus').textContent = susOnlyLocked ? 'Return to demonstration' : 'Continue to background check';
@@ -595,6 +596,16 @@
 
   // ---- Section 0: Intake ----
 
+  function renderIntakeRoute() {
+    var susOnly = session.studyPath === 'sus_only';
+    $('intake-title').textContent = susOnly ? 'SUS participant background' : 'Participant background';
+    $('intake-help').textContent = susOnly
+      ? 'Please provide your name and your familiarity with the Dart and Kotlin languages reviewed by Glance. Your name is kept separately from the SUS responses for the study record.'
+      : 'Please provide your professional background for the SME study. Your name is kept separately from the response data for the study record. Once you submit, you will receive a Participant ID (for example, SME-1) used for the session responses.';
+    $('sme-background-fields').classList.toggle('hidden', susOnly);
+    $('sus-language-fields').classList.toggle('hidden', !susOnly);
+  }
+
   function initIntake() {
     var slider = $('in-years-slider');
     var readout = $('in-years-readout');
@@ -622,6 +633,15 @@
         setTimeout(function () {
           chip.classList.toggle('selected', chip.querySelector('input').checked);
         }, 0);
+      });
+    });
+
+    document.querySelectorAll('#sus-language-familiarity .radio-option').forEach(function (option) {
+      var input = option.querySelector('input');
+      input.addEventListener('change', function () {
+        document.querySelectorAll('#sus-language-familiarity .radio-option').forEach(function (item) {
+          item.classList.toggle('selected', item.querySelector('input').checked);
+        });
       });
     });
 
@@ -657,26 +677,30 @@
         return;
       }
 
+      var susOnly = session.studyPath === 'sus_only';
       var participantName = $('in-name').value.trim();
       var years = cap.checked ? '20+ years' : (Number(slider.value) === 0 ? 'less than 1 year' : slider.value + ' years');
-
       var selectedChips = Array.prototype.slice
         .call(document.querySelectorAll('#platform-chips .chip input:checked'))
         .map(function (i) { return i.value; });
       var other = $('in-platforms-other').value.trim();
       var platforms = selectedChips.concat(other ? [other] : []).join(', ');
-
       var role = $('in-role').value.trim();
+      var languageFamiliarity = selectedValue($('sus-language-familiarity'));
 
       if (!participantName) {
         showError('intake-error', 'Please enter the participant name for the study record.');
         return;
       }
-      if (!platforms) {
+      if (susOnly && !languageFamiliarity) {
+        showError('intake-error', 'Please select your familiarity with Dart and Kotlin.');
+        return;
+      }
+      if (!susOnly && !platforms) {
         showError('intake-error', 'Pick at least one platform/language, or fill in "Other".');
         return;
       }
-      if (!role) {
+      if (!susOnly && !role) {
         showError('intake-error', 'Please fill in the current role.');
         return;
       }
@@ -684,8 +708,11 @@
       var btn = $('btn-intake-submit');
       btn.disabled = true;
       btn.textContent = 'Saving…';
-      var assignmentAction = session.studyPath === 'sus_only' ? 'assignSusOnlyId' : 'assignId';
-      callBackend(assignmentAction, { participantName: participantName, yearsExperience: years, platforms: platforms, role: role })
+      var assignmentAction = susOnly ? 'assignSusOnlyId' : 'assignId';
+      var assignmentPayload = susOnly
+        ? { participantName: participantName, languageFamiliarity: languageFamiliarity }
+        : { participantName: participantName, yearsExperience: years, platforms: platforms, role: role };
+      callBackend(assignmentAction, assignmentPayload)
         .then(function (data) {
           state.participantId = data.id;
           setBadges(data.id);

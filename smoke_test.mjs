@@ -59,13 +59,13 @@ const RESEARCHER_DASHBOARD = {
   participants: [
     {
       participantId: 'SME-10', participantName: 'Aisha Rahman', studyPath: 'full_sme', createdAt: '2026-08-13T09:00:00.000Z',
-      yearsExperience: '8 years', platforms: 'Android, Kotlin', role: 'Mobile Engineer', consentedAt: '2026-08-13T09:01:00.000Z',
+      yearsExperience: '8 years', platforms: 'Android, Kotlin', role: 'Mobile Engineer', languageFamiliarity: null, consentedAt: '2026-08-13T09:01:00.000Z',
       sus1: 4, sus2: 2, sus3: 4, sus4: 2, sus5: 4, sus6: 2, sus7: 4, sus8: 2, sus9: 4, sus10: 2, susScore: 75,
       sampleId: 'mysejahtera-alpha-dart-v1', openedAt: '2026-08-13T09:05:00.000Z', reviewCompletedAt: '2026-08-13T09:06:00.000Z', feedbackOpenedAt: '2026-08-13T09:07:00.000Z', fixAppliedAt: '2026-08-13T09:08:00.000Z'
     },
     {
       participantId: 'SME-11', participantName: 'Farid Omar', studyPath: 'sus_only', createdAt: '2026-08-13T10:00:00.000Z',
-      yearsExperience: '3 years', platforms: 'Dart, Flutter', role: 'Mobile Developer', consentedAt: '2026-08-13T10:01:00.000Z',
+      yearsExperience: null, platforms: null, role: null, languageFamiliarity: 'Dart and Kotlin', consentedAt: '2026-08-13T10:01:00.000Z',
       sus1: 5, sus2: 1, sus3: 5, sus4: 1, sus5: 5, sus6: 1, sus7: 5, sus8: 1, sus9: 5, sus10: 1, susScore: 100,
       sampleId: 'mysejahtera-alpha-dart-v1', openedAt: '2026-08-13T10:05:00.000Z', reviewCompletedAt: '2026-08-13T10:06:00.000Z', feedbackOpenedAt: '2026-08-13T10:07:00.000Z', fixAppliedAt: '2026-08-13T10:08:00.000Z'
     }
@@ -149,6 +149,7 @@ await page.route('**/rest/v1/rpc/*', async (route) => {
       break;
     case 'assign_sus_only_id':
       assert(!Object.prototype.hasOwnProperty.call(body, 'p_access_code'), 'SUS-only assignment never sends the browser-only SME access code');
+      assert(Object.keys(body).length === 2 && body.p_participant_name === 'SUS Test Participant' && body.p_language_familiarity === 'Dart and Kotlin', 'SUS-only assignment sends only the participant name and language familiarity');
       lastAssignSusOnlyPayload = body;
       assignSusOnlyIdCallCount++;
       // Both assignment RPCs share the same identity-backed SME-N sequence.
@@ -272,7 +273,7 @@ await page.waitForTimeout(350);
 assert((await page.textContent('#id-badge-demo')).trim() === 'SME-1', 'assigned ID SME-1 shown after intake, on the Demo section');
 assert(saveConsentCallCount === 1, 'explicit consent is recorded exactly once after the anonymous participant ID is assigned');
 assert(lastAssignIdPayload.p_years_experience === '8 years' && lastAssignIdPayload.p_platforms.includes('Dart') && lastAssignIdPayload.p_role === 'Senior Mobile Engineer', 'full-SME assignment records the shared professional background');
-assert(lastConsentPayload.p_id === 'SME-1' && lastConsentPayload.p_accepted === true && lastConsentPayload.p_consent_version === 'sme-web-consent-v2', 'consent RPC stores only the participant ID, true acceptance, and the current form version');
+assert(lastConsentPayload.p_id === 'SME-1' && lastConsentPayload.p_accepted === true && lastConsentPayload.p_consent_version === 'sme-web-consent-v3', 'consent RPC stores only the participant ID, true acceptance, and the current form version');
 assert(!(await page.evaluate(() => localStorage.getItem('smeSession_v1'))).includes('Jane Doe'), 'participant name is not retained in the browser recovery session');
 await shot('real-2-demo.png');
 
@@ -527,22 +528,20 @@ await page.click('#btn-consent-continue');
 await page.waitForSelector('#section-access.active');
 await page.click('#btn-access-sus');
 await page.waitForSelector('#section-intake.active');
-assert(await page.locator('.step[data-step="intake"].current').count() === 1, 'SUS-only route begins with the same Background step');
+assert(await page.locator('.step[data-step="intake"].current').count() === 1, 'SUS-only route begins with its route-specific Background step');
 assert(await page.locator('.step[data-step="interview"].hidden').count() === 1, 'SUS-only stepper hides Interview');
 assert(await page.locator('.step[data-step="cve"].hidden').count() === 1, 'SUS-only stepper hides Category Check');
 assert((await page.locator('.step:not(.hidden)').count()) === 5, 'SUS-only stepper contains Background, Demo, Hands-on, SUS, and Done');
+assert(await page.locator('#sme-background-fields.hidden').count() === 1 && await page.locator('#sus-language-fields:not(.hidden)').count() === 1, 'SUS-only Background hides SME professional fields and shows language familiarity');
+await shot('real-6b-sus-background.png');
 await page.fill('#in-name', 'SUS Test Participant');
-await page.fill('#in-years-slider', '3');
-await page.dispatchEvent('#in-years-slider', 'input');
-await page.click('#platform-chips .chip:has-text("Dart")');
-await page.click('#platform-chips .chip:has-text("Flutter")');
-await page.fill('#in-role', 'Mobile Developer');
+await page.click('#sus-language-familiarity .radio-option:has-text("Dart and Kotlin")');
 await page.click('#btn-intake-submit');
 await page.waitForSelector('#section-demo.active');
 assert(assignSusOnlyIdCallCount === 1, 'SUS-only route calls its narrow ID-assignment RPC exactly once');
 assert(saveConsentCallCount === 2, 'SUS-only participant consent is recorded after the anonymous ID is assigned');
 assert(lastConsentPayload.p_id === 'SME-2', 'SUS-only consent is linked to the next anonymous SME-N ID');
-assert(lastAssignSusOnlyPayload.p_participant_name === 'SUS Test Participant' && lastAssignSusOnlyPayload.p_years_experience === '3 years' && lastAssignSusOnlyPayload.p_platforms.includes('Flutter') && lastAssignSusOnlyPayload.p_role === 'Mobile Developer', 'SUS-only assignment saves the same name and background fields as the full SME route');
+assert(lastAssignSusOnlyPayload.p_participant_name === 'SUS Test Participant' && lastAssignSusOnlyPayload.p_language_familiarity === 'Dart and Kotlin', 'SUS-only assignment saves name and Dart/Kotlin familiarity without the SME profile');
 assert((await page.textContent('#id-badge-demo')).trim() === 'SME-2', 'SUS-only route displays its assigned anonymous ID');
 assert((await page.textContent('#demo-help')).includes('guided hands-on task'), 'SUS-only demo explains its shorter route');
 

@@ -35,6 +35,7 @@ create table public.intake (
   years_experience  text,
   platforms         text,
   role              text,
+  language_familiarity text check (language_familiarity in ('Dart', 'Kotlin', 'Dart and Kotlin', 'Neither')),
   study_path        text not null default 'full_sme' check (study_path in ('full_sme', 'sus_only')),
   constraint intake_participant_code_unique unique (participant_code)
 );
@@ -244,11 +245,11 @@ end; $$;
 revoke all on function public.assign_id(text, text, text, text) from public;
 grant execute on function public.assign_id(text, text, text, text) to anon;
 
--- The browser code only selects a supervised study route. The SUS-only route
--- records the same participant background, while still skipping the SME-only
--- interview and Category Validation Exercise.
+-- The browser code only selects a supervised study route. SUS-only records
+-- a name plus familiarity with the two reviewed languages; the professional
+-- background remains exclusive to the full SME route.
 create or replace function public.assign_sus_only_id(
-  p_years_experience text, p_platforms text, p_role text, p_participant_name text
+  p_participant_name text, p_language_familiarity text
 )
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare v_code text;
@@ -256,15 +257,18 @@ begin
   if coalesce(btrim(p_participant_name), '') = '' then
     return jsonb_build_object('ok', false, 'error', 'Participant name is required.');
   end if;
-  insert into public.intake (years_experience, platforms, role, study_path)
-  values (p_years_experience, p_platforms, p_role, 'sus_only')
+  if p_language_familiarity is null or p_language_familiarity not in ('Dart', 'Kotlin', 'Dart and Kotlin', 'Neither') then
+    return jsonb_build_object('ok', false, 'error', 'Language familiarity is required.');
+  end if;
+  insert into public.intake (language_familiarity, study_path)
+  values (p_language_familiarity, 'sus_only')
   returning participant_code into v_code;
   insert into public.participant_identity (participant_id, participant_name)
   values (v_code, btrim(p_participant_name));
   return jsonb_build_object('ok', true, 'id', v_code);
 end; $$;
-revoke all on function public.assign_sus_only_id(text, text, text, text) from public;
-grant execute on function public.assign_sus_only_id(text, text, text, text) to anon;
+revoke all on function public.assign_sus_only_id(text, text) from public;
+grant execute on function public.assign_sus_only_id(text, text) to anon;
 
 
 -- Consent must be explicitly true and match the deployed form version. The
@@ -281,7 +285,7 @@ begin
   if p_accepted is distinct from true then
     return jsonb_build_object('ok', false, 'error', 'Explicit consent is required.');
   end if;
-  if p_consent_version is distinct from 'sme-web-consent-v2' then
+  if p_consent_version is distinct from 'sme-web-consent-v3' then
     return jsonb_build_object('ok', false, 'error', 'Unexpected consent form version.');
   end if;
 
@@ -507,6 +511,7 @@ begin
         'yearsExperience', i.years_experience,
         'platforms', i.platforms,
         'role', i.role,
+        'languageFamiliarity', i.language_familiarity,
         'consentedAt', c.consented_at,
         'sus1', s.sus1, 'sus2', s.sus2, 'sus3', s.sus3, 'sus4', s.sus4, 'sus5', s.sus5,
         'sus6', s.sus6, 'sus7', s.sus7, 'sus8', s.sus8, 'sus9', s.sus9, 'sus10', s.sus10,

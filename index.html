@@ -70,10 +70,10 @@
 
       <div class="consent-summary">
         <h3>Purpose and activities</h3>
-        <p>This study evaluates Glance, a mobile AI-assisted code review application for Dart and Kotlin. Every session includes a background check, demonstration, one guided hands-on task, and the System Usability Scale questionnaire. An invited SME session also includes interview and category-validation questions.</p>
+        <p>This study evaluates Glance, a mobile AI-assisted code review application for Dart and Kotlin. Every session includes a short background check, demonstration, one guided hands-on task, and the System Usability Scale questionnaire. An invited SME session also includes interview and category-validation questions.</p>
 
         <h3>What is recorded</h3>
-        <p>Your name and professional background will be recorded for the study record, together with a participant ID. Session responses, including hands-on task milestone timestamps and SUS answers, are recorded under that ID. Invited SME sessions also record interview and category-validation answers. Your name is held separately from response data and is visible only in the protected researcher dashboard.</p>
+        <p>Your name and a small amount of background information will be recorded for the study record, together with a participant ID. SUS-only sessions record familiarity with Dart and Kotlin. Invited SME sessions record professional background, interview, and category-validation answers. Session responses, including hands-on task milestone timestamps and SUS answers, are recorded under the participant ID. Your name is held separately from response data and is visible only in the protected researcher dashboard.</p>
 
         <h3>Your choice</h3>
         <p>Taking part is voluntary. You may ask to pause or stop before submitting an answer. The application is being evaluated, not your professional performance.</p>
@@ -83,7 +83,7 @@
         <input type="checkbox" id="consent-agree">
         I have read the information above, had the opportunity to ask questions, and voluntarily agree to take part in this study.
       </label>
-      <p class="help">Consent version: SME-web-consent-v2. The consent timestamp and version are recorded after your Participant ID is assigned.</p>
+      <p class="help">Consent version: SME-web-consent-v3. The consent timestamp and version are recorded after your Participant ID is assigned.</p>
 
       <div id="consent-error" class="error hidden" role="alert"></div>
       <div id="consent-declined" class="status hidden">No response has been saved. You may close this page or speak with the researcher.</div>
@@ -99,7 +99,7 @@
     <div class="card access-card">
       <p class="pill">Session selection</p>
       <h2 id="access-title">Study access</h2>
-      <p id="access-summary">If the researcher gave you an SME access code, enter it to continue with the full SME session. Otherwise, continue to the usability session. Both sessions begin with the same participant background check.</p>
+      <p id="access-summary">If the researcher gave you an SME access code, enter it to continue with the full SME session. Otherwise, continue to the usability session. Both sessions begin with a short background check tailored to the study route.</p>
 
       <div id="access-code-block">
         <label for="access-code">SME access code</label>
@@ -118,48 +118,61 @@
   <!-- ============ SECTION 0: INTAKE ============ -->
   <section id="section-intake" class="section">
     <div class="card">
-      <h2>Participant background</h2>
-      <p class="help">This background check is completed for every participant. Your name is kept separately from the response data for the study record. Once you submit, you will receive a Participant ID (for example, SME-1) used for the session responses.</p>
+      <h2 id="intake-title">Participant background</h2>
+      <p class="help" id="intake-help">This background check is completed for every participant. Your name is kept separately from the response data for the study record. Once you submit, you will receive a Participant ID (for example, SME-1) used for the session responses.</p>
 
       <label for="in-name">Participant name</label>
       <input type="text" id="in-name" autocomplete="off">
 
-      <label for="in-years">Years of professional experience in mobile development</label>
-      <div class="slider-row">
-        <input type="range" id="in-years-slider" min="0" max="20" step="1" value="5">
-        <div class="slider-readout" id="in-years-readout">5 years</div>
-      </div>
-      <label class="checkbox-inline">
-        <input type="checkbox" id="in-years-cap"> More than 20 years
-      </label>
-      <p class="help">Supervisor's floor for this round of interviews is 3&ndash;5 years.</p>
+      <div id="sme-background-fields">
+        <label for="in-years">Years of professional experience in mobile development</label>
+        <div class="slider-row">
+          <input type="range" id="in-years-slider" min="0" max="20" step="1" value="5">
+          <div class="slider-readout" id="in-years-readout">5 years</div>
+        </div>
+        <label class="checkbox-inline">
+          <input type="checkbox" id="in-years-cap"> More than 20 years
+        </label>
+        <p class="help">Supervisor's floor for this round of interviews is 3&ndash;5 years.</p>
 
-      <label>Platforms and languages you have worked with most</label>
-      <div class="chip-row" id="platform-chips">
-        <label class="chip"><input type="checkbox" value="Android"> Android</label>
-        <label class="chip"><input type="checkbox" value="iOS"> iOS</label>
-        <label class="chip"><input type="checkbox" value="Kotlin"> Kotlin</label>
-        <label class="chip"><input type="checkbox" value="Dart"> Dart</label>
-        <label class="chip"><input type="checkbox" value="Flutter"> Flutter</label>
-        <label class="chip"><input type="checkbox" value="Swift"> Swift</label>
-        <label class="chip"><input type="checkbox" value="Java"> Java</label>
-        <label class="chip"><input type="checkbox" value="React Native"> React Native</label>
-        <label class="chip"><input type="checkbox" value="Xamarin"> Xamarin</label>
-      </div>
-      <input type="text" id="in-platforms-other" placeholder="Other platforms/languages (optional)">
+        <label>Platforms and languages you have worked with most</label>
+        <div class="chip-row" id="platform-chips">
+          <label class="chip"><input type="checkbox" value="Android"> Android</label>
+          <label class="chip"><input type="checkbox" value="iOS"> iOS</label>
+          <label class="chip"><input type="checkbox" value="Kotlin"> Kotlin</label>
+          <label class="chip"><input type="checkbox" value="Dart"> Dart</label>
+          <label class="chip"><input type="checkbox" value="Flutter"> Flutter</label>
+          <label class="chip"><input type="checkbox" value="Swift"> Swift</label>
+          <label class="chip"><input type="checkbox" value="Java"> Java</label>
+          <label class="chip"><input type="checkbox" value="React Native"> React Native</label>
+          <label class="chip"><input type="checkbox" value="Xamarin"> Xamarin</label>
+        </div>
+        <input type="text" id="in-platforms-other" placeholder="Other platforms/languages (optional)">
 
-      <label for="in-role">Current role</label>
-      <input type="text" id="in-role" placeholder="Start typing, or type your own" list="role-suggestions" autocomplete="off">
-      <datalist id="role-suggestions">
-        <option value="Mobile Software Engineer">
-        <option value="Senior Mobile Engineer">
-        <option value="Android Developer">
-        <option value="iOS Developer">
-        <option value="Flutter Developer">
-        <option value="Full-Stack Developer">
-        <option value="Software Engineering Lead">
-        <option value="Freelance Mobile Developer">
-      </datalist>
+        <label for="in-role">Current role</label>
+        <input type="text" id="in-role" placeholder="Start typing, or type your own" list="role-suggestions" autocomplete="off">
+        <datalist id="role-suggestions">
+          <option value="Mobile Software Engineer">
+          <option value="Senior Mobile Engineer">
+          <option value="Android Developer">
+          <option value="iOS Developer">
+          <option value="Flutter Developer">
+          <option value="Full-Stack Developer">
+          <option value="Software Engineering Lead">
+          <option value="Freelance Mobile Developer">
+        </datalist>
+      </div>
+
+      <div id="sus-language-fields" class="hidden">
+        <label>Have you worked with either programming language reviewed by Glance?</label>
+        <p class="help">Choose the option that best describes your familiarity with Dart and Kotlin.</p>
+        <div class="radio-row" id="sus-language-familiarity" role="radiogroup" aria-label="Familiarity with Dart and Kotlin">
+          <label class="radio-option"><input type="radio" name="sus-language-familiarity" value="Dart"> Dart</label>
+          <label class="radio-option"><input type="radio" name="sus-language-familiarity" value="Kotlin"> Kotlin</label>
+          <label class="radio-option"><input type="radio" name="sus-language-familiarity" value="Dart and Kotlin"> Dart and Kotlin</label>
+          <label class="radio-option"><input type="radio" name="sus-language-familiarity" value="Neither"> Neither</label>
+        </div>
+      </div>
 
       <div id="intake-error" class="error hidden"></div>
       <button id="btn-intake-submit">Continue</button>

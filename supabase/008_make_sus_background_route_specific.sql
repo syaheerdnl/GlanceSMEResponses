@@ -1,68 +1,28 @@
--- Incremental migration for shared Background collection and the protected
--- participant-name record. Run once after 003, 004 and 005. It is safe to
--- run whether or not 006 was run, because it ensures the dashboard allowlist
--- and RPC exist as well.
+-- Incremental migration for installations that already ran the original 007.
+-- Run this after 003, 004, 005 and 007. It changes SUS-only Background from
+-- the SME professional profile to the participant name plus Dart/Kotlin
+-- familiarity, while keeping professional fields exclusive to full SME.
 
--- Keep identity separate from questionnaire answers. This table is never
--- readable directly from the public API; only the authenticated, allowlisted
--- researcher_dashboard function can join it for the researcher record.
-create table if not exists public.participant_identity (
-  participant_id   text primary key references public.intake (participant_code),
-  participant_name text not null check (btrim(participant_name) <> ''),
-  created_at       timestamptz not null default now()
-);
-
-alter table public.participant_identity enable row level security;
-revoke all on public.participant_identity from anon, authenticated;
-
--- SUS-only participants do not need the professional SME profile. Record
--- only their familiarity with the languages reviewed by Glance.
 alter table public.intake
-  add column if not exists language_familiarity text
-  check (language_familiarity in ('Dart', 'Kotlin', 'Dart and Kotlin', 'Neither'));
+  add column if not exists language_familiarity text;
 
--- 006's allowlist is repeated here so this migration can complete the whole
--- dashboard setup if 006 was missed. It does not widen access.
-create table if not exists public.researcher_access (
-  email       text primary key check (email = lower(email)),
-  created_at  timestamptz not null default now()
-);
-
-insert into public.researcher_access (email)
-values ('muhammadsyaheerdaniel@gmail.com')
-on conflict (email) do nothing;
-
-alter table public.researcher_access enable row level security;
-revoke all on public.researcher_access from anon, authenticated;
-
--- Replace the old assignment functions. Full SME records professional
--- background; SUS-only records only name and Dart/Kotlin familiarity. The
--- browser-only SME code still decides only which study stages are included.
-drop function if exists public.assign_id(text, text, text);
-drop function if exists public.assign_sus_only_id();
-drop function if exists public.assign_sus_only_id(text, text, text, text);
-drop function if exists public.assign_sus_only_id(text, text);
-
-create or replace function public.assign_id(
-  p_years_experience text, p_platforms text, p_role text, p_participant_name text
-) returns jsonb language plpgsql security definer set search_path = '' as $$
-declare v_code text;
+do $$
 begin
-  if coalesce(btrim(p_participant_name), '') = '' then
-    return jsonb_build_object('ok', false, 'error', 'Participant name is required.');
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'intake_language_familiarity_check'
+      and conrelid = 'public.intake'::regclass
+  ) then
+    alter table public.intake
+      add constraint intake_language_familiarity_check
+      check (language_familiarity is null or language_familiarity in ('Dart', 'Kotlin', 'Dart and Kotlin', 'Neither'));
   end if;
+end $$;
 
-  insert into public.intake (years_experience, platforms, role, study_path)
-  values (p_years_experience, p_platforms, p_role, 'full_sme')
-  returning participant_code into v_code;
-
-  insert into public.participant_identity (participant_id, participant_name)
-  values (v_code, btrim(p_participant_name));
-
-  return jsonb_build_object('ok', true, 'id', v_code);
-end; $$;
-revoke all on function public.assign_id(text, text, text, text) from public;
-grant execute on function public.assign_id(text, text, text, text) to anon;
+-- Original 007 accepted four professional-background arguments for SUS-only.
+-- Replace that function with the narrower, route-appropriate two-field form.
+drop function if exists public.assign_sus_only_id(text, text, text, text);
+drop function if exists public.assign_sus_only_id();
 
 create or replace function public.assign_sus_only_id(
   p_participant_name text, p_language_familiarity text
@@ -88,9 +48,8 @@ end; $$;
 revoke all on function public.assign_sus_only_id(text, text) from public;
 grant execute on function public.assign_sus_only_id(text, text) to anon;
 
--- New sessions see consent version 3, which also covers the route-specific
--- SUS language-familiarity record. Earlier versions remain accepted only for
--- interrupted pre-change sessions.
+-- Consent v3 accurately describes the SUS-only language-familiarity field.
+-- Versions 1 and 2 stay valid only for already-started older sessions.
 create or replace function public.save_consent(
   p_id text, p_accepted boolean, p_consent_version text
 ) returns jsonb language plpgsql security definer set search_path = '' as $$
@@ -118,8 +77,9 @@ end; $$;
 revoke all on function public.save_consent(text, boolean, text) from public;
 grant execute on function public.save_consent(text, boolean, text) to anon;
 
--- A valid Supabase Auth session must still carry the approved signed email.
--- The function is never granted to anon and direct table reads remain denied.
+-- Keep the private dashboard and Participants CSV supplied with the new
+-- route-specific field. It remains unavailable to anon and still verifies
+-- the authenticated email against the RLS-locked allowlist server-side.
 create or replace function public.researcher_dashboard()
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare v_email text;
