@@ -284,6 +284,23 @@
     banner.classList.remove('hidden');
   }
 
+  // Colors just the 4 fixed category names wherever they appear as a choice
+  // (guess options, correct-category, could-also-be) — matches the same
+  // legend/reference-card colors, and is safe pre-guess since it's a fixed
+  // property of the category system itself, not tied to any one finding's
+  // actual answer. Anything that isn't a category name (Yes/No, 1-5 SUS
+  // scale, etc.) renders as plain text, unaffected.
+  function categoryLabelNode(text) {
+    if (CATEGORY_COLORS[text]) {
+      var span = document.createElement('span');
+      span.style.color = CATEGORY_COLORS[text];
+      span.style.fontWeight = '700';
+      span.textContent = text;
+      return span;
+    }
+    return document.createTextNode(text);
+  }
+
   function makeRadioOption(groupName, value, labelText, onPick) {
     var label = document.createElement('label');
     label.className = 'radio-option';
@@ -292,7 +309,8 @@
     input.name = groupName;
     input.value = value;
     label.appendChild(input);
-    label.appendChild(document.createTextNode(' ' + labelText));
+    label.appendChild(document.createTextNode(' '));
+    label.appendChild(categoryLabelNode(labelText));
     label.addEventListener('click', function () {
       var group = label.parentElement.querySelectorAll('.radio-option');
       group.forEach(function (o) { o.classList.remove('selected'); });
@@ -715,7 +733,7 @@
       badge.className = 'pill rank-badge hidden';
 
       label.appendChild(cb);
-      label.appendChild(document.createTextNode(cat));
+      label.appendChild(categoryLabelNode(cat));
 
       cb.addEventListener('change', function () {
         if (cb.checked) {
