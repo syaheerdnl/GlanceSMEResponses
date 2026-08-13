@@ -61,12 +61,14 @@ const RESEARCHER_DASHBOARD = {
       participantId: 'SME-10', participantName: 'Aisha Rahman', studyPath: 'full_sme', createdAt: '2026-08-13T09:00:00.000Z',
       yearsExperience: '8 years', platforms: 'Android, Kotlin', role: 'Mobile Engineer', languageFamiliarity: null, consentedAt: '2026-08-13T09:01:00.000Z',
       sus1: 4, sus2: 2, sus3: 4, sus4: 2, sus5: 4, sus6: 2, sus7: 4, sus8: 2, sus9: 4, sus10: 2, susScore: 75,
+      susFeedbackDifficulty: 'The code preview needs clearer line highlighting.', susFeedbackImprovement: 'Make the review result easier to scan.',
       sampleId: 'mysejahtera-alpha-dart-v1', openedAt: '2026-08-13T09:05:00.000Z', reviewCompletedAt: '2026-08-13T09:06:00.000Z', feedbackOpenedAt: '2026-08-13T09:07:00.000Z', fixAppliedAt: '2026-08-13T09:08:00.000Z'
     },
     {
       participantId: 'SME-11', participantName: 'Farid Omar', studyPath: 'sus_only', createdAt: '2026-08-13T10:00:00.000Z',
       yearsExperience: null, platforms: null, role: null, languageFamiliarity: 'Dart and Kotlin', consentedAt: '2026-08-13T10:01:00.000Z',
       sus1: 5, sus2: 1, sus3: 5, sus4: 1, sus5: 5, sus6: 1, sus7: 5, sus8: 1, sus9: 5, sus10: 1, susScore: 100,
+      susFeedbackDifficulty: null, susFeedbackImprovement: null,
       sampleId: 'mysejahtera-alpha-dart-v1', openedAt: '2026-08-13T10:05:00.000Z', reviewCompletedAt: '2026-08-13T10:06:00.000Z', feedbackOpenedAt: '2026-08-13T10:07:00.000Z', fixAppliedAt: '2026-08-13T10:08:00.000Z'
     }
   ],
@@ -86,6 +88,7 @@ var lastAssignIdPayload = null;
 var lastAssignSusOnlyPayload = null;
 var saveConsentCallCount = 0;
 var lastConsentPayload = null;
+var susPayloads = [];
 var handsOnMilestoneCallCount = {}; // milestone -> count; the task RPC must be idempotent client-side too
 var magicLinkCallCount = 0;
 var researcherDashboardCallCount = 0;
@@ -105,7 +108,7 @@ await page.route('**/auth/v1/*', async (route) => {
     magicLinkCallCount++;
     assert(body.email === 'muhammadsyaheerdaniel@gmail.com', 'researcher magic link is sent only to the approved email');
     assert(body.create_user === true, 'first magic-link sign-in can create the approved Auth account');
-    assert(body.redirect_to === fileUrl + 'researcher.html', 'researcher magic link returns to the private dashboard page');
+    assert(body.redirect_to === 'https://syaheerdnl.github.io/GlanceSMEResponses/researcher.html', 'researcher magic link always returns to the authorised live dashboard page');
     await route.fulfill({ contentType: 'application/json', body: '{}' });
     return;
   }
@@ -173,6 +176,7 @@ await page.route('**/rest/v1/rpc/*', async (route) => {
       resp = { ok: true };
       break;
     case 'save_sus':
+      susPayloads.push(body);
       resp = { ok: true, susScore: 82.5 };
       break;
     case 'save_hands_on_milestone':
@@ -273,7 +277,7 @@ await page.waitForTimeout(350);
 assert((await page.textContent('#id-badge-demo')).trim() === 'SME-1', 'assigned ID SME-1 shown after intake, on the Demo section');
 assert(saveConsentCallCount === 1, 'explicit consent is recorded exactly once after the anonymous participant ID is assigned');
 assert(lastAssignIdPayload.p_years_experience === '8 years' && lastAssignIdPayload.p_platforms.includes('Dart') && lastAssignIdPayload.p_role === 'Senior Mobile Engineer', 'full-SME assignment records the shared professional background');
-assert(lastConsentPayload.p_id === 'SME-1' && lastConsentPayload.p_accepted === true && lastConsentPayload.p_consent_version === 'sme-web-consent-v3', 'consent RPC stores only the participant ID, true acceptance, and the current form version');
+assert(lastConsentPayload.p_id === 'SME-1' && lastConsentPayload.p_accepted === true && lastConsentPayload.p_consent_version === 'sme-web-consent-v4', 'consent RPC stores only the participant ID, true acceptance, and the current form version');
 assert(!(await page.evaluate(() => localStorage.getItem('smeSession_v1'))).includes('Jane Doe'), 'participant name is not retained in the browser recovery session');
 await shot('real-2-demo.png');
 
@@ -486,17 +490,23 @@ await page.waitForTimeout(350);
 assert((await page.locator('#sus-items > div').count()) === 10, 'all 10 SUS items rendered');
 assert((await page.locator('#sus-items > .sus-item').count()) === 10, 'SUS items use the structured response grid');
 assert((await page.locator('#sus-items .sus-likert .radio-option').count()) === 50, 'SUS grid keeps all 50 selectable tap targets');
+assert(await page.locator('#sus-feedback-difficulty, #sus-feedback-improvement').count() === 2, 'optional feedback fields appear below the fixed SUS instrument');
+assert((await page.textContent('.sus-feedback')).includes('not part of the SUS score'), 'optional feedback is clearly separated from the SUS score');
 await shot('real-5-sus.png');
 
 // --- 6b. Resume: answer a few SUS items, reload, expect them restored ---
 await page.click('#sus-items > div:nth-child(1) .radio-option >> nth=2'); // "3"
 await page.click('#sus-items > div:nth-child(2) .radio-option >> nth=4'); // "5"
+await page.fill('#sus-feedback-difficulty', 'A draft concern that must not survive a reload.');
+await page.fill('#sus-feedback-improvement', 'A draft improvement that must not survive a reload.');
 await page.waitForTimeout(200);
+assert(!(await page.evaluate(() => localStorage.getItem('smeSession_v1'))).includes('A draft concern'), 'optional feedback is never written to browser recovery storage');
 await page.reload();
 await page.waitForTimeout(300);
 assert(await page.locator('#section-sus.active').count() === 1, 'reload resumes on the SUS section');
 assert(await page.locator('#sus-items > div:nth-child(1) .radio-option.selected').count() === 1, 'first SUS answer restored after reload');
 assert(await page.locator('#sus-items > div:nth-child(2) .radio-option.selected').count() === 1, 'second SUS answer restored after reload');
+assert((await page.inputValue('#sus-feedback-difficulty')) === '' && (await page.inputValue('#sus-feedback-improvement')) === '', 'optional feedback is cleared after a reload instead of being stored locally');
 
 // --- 7. Submit SUS without answering all items: expect error ---
 await page.click('#btn-sus-submit');
@@ -506,11 +516,15 @@ assert(await page.locator('#sus-error:not(.hidden)').count() === 1, 'blocks inco
 for (let i = 1; i <= 10; i++) {
   await page.click('#sus-items > div:nth-child(' + i + ') .radio-option >> nth=2'); // pick "3" for each
 }
+await page.fill('#sus-feedback-difficulty', 'The result view was difficult to scan on a phone.');
+await page.fill('#sus-feedback-improvement', 'Group the most important review findings first.');
 await page.click('#btn-sus-submit');
 await page.waitForSelector('#section-done.active');
 await page.waitForTimeout(350);
 assert((await page.textContent('#done-id')).includes('SME-1'), 'done screen shows participant id');
-assert((await page.textContent('#done-sus-score')).includes('82.5'), 'done screen shows SUS score from backend');
+assert((await page.textContent('#done-sus-score')).includes('responses have been recorded'), 'done screen confirms recording without presenting SUS as a participant pass/fail score');
+assert(!(await page.textContent('#done-sus-score')).includes('82.5'), 'done screen does not reveal the numerical SUS score');
+assert(susPayloads.length === 1 && susPayloads[0].p_feedback_difficulty.includes('difficult to scan') && susPayloads[0].p_feedback_improvement.includes('Group the most important'), 'full-SME SUS submission includes optional written feedback separately from the ten scores');
 await shot('real-6-done.png');
 
 // --- 7b. A completed run clears the saved session — reloading must NOT resume it ---
@@ -565,6 +579,12 @@ assert(await page.locator('#btn-prototype-continue:not(:disabled)').count() === 
 await page.click('#btn-prototype-continue');
 await page.waitForSelector('#section-sus.active');
 assert((await page.locator('#sus-items > .sus-item').count()) === 10, 'SUS-only route reaches the same 10-item SUS instrument');
+for (let i = 1; i <= 10; i++) {
+  await page.click('#sus-items > div:nth-child(' + i + ') .radio-option >> nth=2');
+}
+await page.click('#btn-sus-submit');
+await page.waitForSelector('#section-done.active');
+assert(susPayloads.length === 2 && susPayloads[1].p_feedback_difficulty === '' && susPayloads[1].p_feedback_improvement === '', 'SUS-only route can submit the same scale with optional feedback left blank');
 
 // --- 9. Researcher dashboard: public URL alone exposes no records. It first
 // requests a magic link only for the approved email, then the server-side RPC
@@ -585,7 +605,13 @@ assert((await page.textContent('#metric-sus')).trim() === '87.5', 'researcher da
 assert((await page.textContent('#researcher-cve-overall')).includes('50%'), 'researcher dashboard calculates the blind category match rate');
 assert(await page.locator('#researcher-participant-rows tr').count() === 2, 'researcher dashboard shows anonymous participant overview rows');
 assert((await page.textContent('#researcher-participant-rows')).includes('Aisha Rahman') && (await page.textContent('#researcher-participant-rows')).includes('Farid Omar'), 'researcher dashboard alone shows the separately protected participant names');
+assert(!(await page.textContent('#researcher-participant-rows')).includes('clearer line highlighting'), 'free-text feedback is excluded from the participant overview table');
 assert(!page.url().includes('researcher-access-token'), 'magic-link access token is removed from the URL after being handled');
+const susDownloadPromise = page.waitForEvent('download');
+await page.click('#btn-export-sus');
+const susDownload = await susDownloadPromise;
+const susCsv = fs.readFileSync(await susDownload.path(), 'utf8');
+assert(susCsv.includes('"feedback_difficulty","feedback_improvement"') && susCsv.includes('The code preview needs clearer line highlighting.'), 'protected SUS CSV includes optional feedback and no other dashboard surface does');
 await shot('real-7-researcher-dashboard.png');
 await page.selectOption('#researcher-route-filter', 'sus_only');
 assert((await page.textContent('#metric-participants')).trim() === '1', 'researcher filter separates SUS-only participants');

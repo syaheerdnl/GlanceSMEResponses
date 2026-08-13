@@ -73,7 +73,7 @@
         <p>This study evaluates Glance, a mobile AI-assisted code review application for Dart and Kotlin. Every session includes a short background check, demonstration, one guided hands-on task, and the System Usability Scale questionnaire. An invited SME session also includes interview and category-validation questions.</p>
 
         <h3>What is recorded</h3>
-        <p>Your name and a small amount of background information will be recorded for the study record, together with a participant ID. SUS-only sessions record familiarity with Dart and Kotlin. Invited SME sessions record professional background, interview, and category-validation answers. Session responses, including hands-on task milestone timestamps and SUS answers, are recorded under the participant ID. Your name is held separately from response data and is visible only in the protected researcher dashboard.</p>
+        <p>Your name and a small amount of background information will be recorded for the study record, together with a participant ID. SUS-only sessions record familiarity with Dart and Kotlin. Invited SME sessions record professional background, interview, and category-validation answers. Session responses, including hands-on task milestone timestamps, SUS answers, and any optional written feedback, are recorded under the participant ID. Your name is held separately from response data and is visible only in the protected researcher dashboard.</p>
 
         <h3>Your choice</h3>
         <p>Taking part is voluntary. You may ask to pause or stop before submitting an answer. The application is being evaluated, not your professional performance.</p>
@@ -355,6 +355,14 @@
       <h2>System Usability Scale (SUS)</h2>
       <p class="help">Rate each statement from 1 (Strongly Disagree) to 5 (Strongly Agree), based on your experience using the application during the session.</p>
       <div id="sus-items"></div>
+      <section class="sus-feedback" aria-labelledby="sus-feedback-title">
+        <h3 id="sus-feedback-title">Additional feedback <span>(optional)</span></h3>
+        <p class="help">These questions are not part of the SUS score. Do not include personal information, confidential code, credentials, or API keys.</p>
+        <label for="sus-feedback-difficulty">What, if anything, was difficult or confusing when using Glance?</label>
+        <textarea id="sus-feedback-difficulty" maxlength="1000" rows="4"></textarea>
+        <label for="sus-feedback-improvement">What one change would most improve Glance?</label>
+        <textarea id="sus-feedback-improvement" maxlength="1000" rows="4"></textarea>
+      </section>
       <div class="status hidden" id="sus-draft-status">Draft saved</div>
       <div id="sus-error" class="error hidden"></div>
       <button id="btn-sus-submit">Finish</button>
@@ -377,6 +385,6 @@
 <script src="config.js"></script>
 <!-- Version query prevents a browser from pairing this updated page with an
      older cached app.js after a GitHub Pages deployment. -->
-<script src="app.js?v=20260813-study-path"></script>
+<script src="app.js?v=20260813-sus-feedback"></script>
 </body>
 </html>

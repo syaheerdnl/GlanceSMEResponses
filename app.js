@@ -144,7 +144,7 @@
   var SUS_ONLY_STEPS = ['intake', 'demo', 'prototype', 'sus', 'done'];
   var PROTOTYPE_SAMPLE_ID = 'mysejahtera-alpha-dart-v1';
   var PROTOTYPE_MILESTONES = ['opened', 'review-completed', 'feedback-opened', 'fix-applied'];
-  var CONSENT_VERSION = 'sme-web-consent-v3';
+  var CONSENT_VERSION = 'sme-web-consent-v4';
 
   // ---- State (live, in-memory) ----
 
@@ -401,7 +401,7 @@
     saveInterview:   { fn: 'save_interview',   params: { id: 'p_id', q2: 'p_q2', q3: 'p_q3', q4: 'p_q4', q5: 'p_q5', q6: 'p_q6' } },
     submitGuess:     { fn: 'submit_guess',     params: { id: 'p_id', findingNum: 'p_finding_num', guess: 'p_guess' } },
     submitAgreement: { fn: 'submit_agreement', params: { id: 'p_id', findingNum: 'p_finding_num', agreement: 'p_agreement', correctCategory: 'p_correct_category', couldAlsoBe: 'p_could_also_be' } },
-    saveSUS:         { fn: 'save_sus',         params: { id: 'p_id', scores: 'p_scores' } },
+    saveSUS:         { fn: 'save_sus',         params: { id: 'p_id', scores: 'p_scores', feedbackDifficulty: 'p_feedback_difficulty', feedbackImprovement: 'p_feedback_improvement' } },
     saveHandsOnMilestone: { fn: 'save_hands_on_milestone', params: { id: 'p_id', milestone: 'p_milestone', sampleId: 'p_sample_id' } }
   };
 
@@ -1341,13 +1341,24 @@
         scores.push(Number(v));
       }
 
+      // These supplementary prompts are deliberately not added to `session`.
+      // They remain only in the live page until this final submission, rather
+      // than being written into localStorage with the resumable SUS scores.
+      var feedbackDifficulty = $('sus-feedback-difficulty').value;
+      var feedbackImprovement = $('sus-feedback-improvement').value;
+
       var btn = $('btn-sus-submit');
       btn.disabled = true;
       btn.textContent = 'Saving…';
-      callBackend('saveSUS', { id: state.participantId, scores: scores })
+      callBackend('saveSUS', {
+        id: state.participantId,
+        scores: scores,
+        feedbackDifficulty: feedbackDifficulty,
+        feedbackImprovement: feedbackImprovement
+      })
         .then(function (data) {
           $('done-id').textContent = state.participantId;
-          $('done-sus-score').textContent = 'SUS score recorded: ' + data.susScore + ' / 100';
+          $('done-sus-score').textContent = 'Your SUS responses have been recorded.';
           clearSession();
           showSection('section-done');
         })

@@ -41,13 +41,14 @@ if you'd rather begin fresh.
 | `supabase/006_add_researcher_dashboard.sql` | Incremental migration for the private researcher results dashboard |
 | `supabase/007_add_shared_background_and_identity.sql` | Incremental migration for shared background fields and protected participant names |
 | `supabase/008_make_sus_background_route_specific.sql` | Follow-up migration for installations that already ran the first version of 007 |
+| `supabase/009_add_optional_sus_feedback.sql` | Optional post-SUS feedback, consent v4, and protected SUS CSV export |
 
 ## Part 1 — Deploy the backend (Supabase)
 
 1. Go to [supabase.com](https://supabase.com) and sign in (or create a free account).
 2. Click **New Project**. Give it a name (e.g. "SME Interview Study"), set a database password (save it somewhere safe — you likely won't need it day-to-day, but you will if you ever need direct DB access), pick a region, and create it. Provisioning takes a minute or two.
 3. In the project dashboard, open the **SQL Editor** (left sidebar), click **New query**, paste in the entire contents of `supabase/migration.sql`, and click **Run**. This creates all 9 tables, locks every one of them down with Row Level Security (so nothing is readable/writable except through the functions below), seeds the 6 findings, and creates the 9 functions the frontend calls.
-4. For an already-live project, run `supabase/003_add_hands_on_task.sql`, `supabase/004_add_participant_consent.sql`, `supabase/005_add_study_path.sql`, and the current `supabase/007_add_shared_background_and_identity.sql` once, in that order. Migration 007 adds the protected name record, the route-appropriate SUS language-familiarity field, and the private researcher dashboard without exposing direct table reads. If you ran the earlier version of 007 before this update, also run `supabase/008_make_sus_background_route_specific.sql` afterwards. If `006_add_researcher_dashboard.sql` was already run, leave it in place and still run 007.
+4. For an already-live project, run `supabase/003_add_hands_on_task.sql`, `supabase/004_add_participant_consent.sql`, `supabase/005_add_study_path.sql`, and the current `supabase/007_add_shared_background_and_identity.sql` once, in that order. Migration 007 adds the protected name record, the route-appropriate SUS language-familiarity field, and the private researcher dashboard without exposing direct table reads. If you ran the earlier version of 007 before this update, also run `supabase/008_make_sus_background_route_specific.sql` afterwards. Then run `supabase/009_add_optional_sus_feedback.sql` to enable the optional feedback fields and consent v4. If `006_add_researcher_dashboard.sql` was already run, leave it in place and still run 007.
 5. Verify it worked: **Table Editor** (left sidebar) should now show `intake`, `participant_identity`, `consent`, `interview`, `category_validation`, `hands_on_task`, `sus`, `findings`, and `researcher_access`. **Database > Functions** should list `assign_id`, `assign_sus_only_id`, `save_consent`, `save_interview`, `submit_guess`, `submit_agreement`, `save_hands_on_milestone`, `save_sus`, and `researcher_dashboard`.
 6. Go to **Project Settings > API**. Copy the **Project URL** and the **anon public** key — **not** the `service_role` key, which must never be used client-side. You'll paste these into `config.js` in Part 2.
 
@@ -77,6 +78,8 @@ The public study footer links to `researcher.html`, but knowing that URL does no
 3. In **Authentication > Providers**, ensure the Email provider is enabled. Its default magic-link template must keep the `{{ .ConfirmationURL }}` link.
 4. Open the live study page, select **Researcher results** in the footer, and select **Email me a sign-in link**. Open the received email on the approved account. The dashboard then provides the combined participant overview and route-filtered CSV exports.
 
+The dashboard explicitly uses that GitHub Pages researcher URL as its magic-link return address. This means a researcher testing a local `file://` copy is still returned to the authorised live dashboard after email verification.
+
 Do not replace this with a browser PIN. A browser PIN can be read from public JavaScript, while the dashboard here is protected by a Supabase Auth session and a server-side email allowlist.
 
 ## Testing it before a real session
@@ -87,7 +90,7 @@ Open the GitHub Pages URL (or just open `index.html` directly in a browser for a
 - After consent, use the researcher-supplied browser code `0811` for the full SME route. This is a route selector, not a login or security control. The SME route collects professional experience, platforms/languages, and role. Continuing without a code selects the SUS-only route, which collects only the participant name and Dart/Kotlin familiarity, then skips Interview and Category Check.
 - Complete one test route. It should receive `SME-1` (or the next number, if the tables already have rows) after the shared Background page, then land on the demonstration.
 - Check the Supabase **Table Editor** after a test run — the `intake` table should show your test row. If nothing shows up, check the **Logs** section in the Supabase dashboard (Logs > Postgres/API) for an error.
-- Confirm the consent checkbox. After background submission, `consent` should contain only the participant ID, acceptance, form version, and timestamp; the name should be in the separate `participant_identity` table. Complete the embedded hands-on task once. `hands_on_task` should receive only its fixed sample id and four timestamps, then SUS should unlock. Delete your test row(s) from `participant_identity`, `intake`, and matching rows in `consent`/`interview`/`category_validation`/`hands_on_task`/`sus` before the first real participant, so IDs start clean at SME-1.
+- Confirm the consent checkbox. After background submission, `consent` should contain only the participant ID, acceptance, form version, and timestamp; the name should be in the separate `participant_identity` table. Complete the embedded hands-on task once. `hands_on_task` should receive only its fixed sample id and four timestamps, then SUS should unlock. The two written questions after SUS are optional, do not affect the SUS score, and appear only in the protected SUS CSV. Delete your test row(s) from `participant_identity`, `intake`, and matching rows in `consent`/`interview`/`category_validation`/`hands_on_task`/`sus` before the first real participant, so IDs start clean at SME-1.
 
 ## How responses are organized
 
@@ -99,11 +102,15 @@ Nine tables (the protected researcher dashboard is the recommended export path),
 - **interview** — participant ID, timestamp, and free-text notes for Q2–Q6.
 - **category_validation** — one row per finding (6 per participant): participant ID, finding number, line, finding title, the participant's blind guess, the AI-assigned category, their agreement answer, correct category if they disagreed, and any "could also be" ranking.
 - **hands_on_task** — the fixed sample ID plus first timestamps for prototype opened, review completed, feedback opened, and suggested fix applied. It never stores code, Firebase IDs, email, or Glance history.
-- **sus** — participant ID, timestamp, all 10 item scores, and the computed 0–100 SUS score.
+- **sus** — participant ID, timestamp, all 10 item scores, the computed 0–100 SUS score, and optional difficulty/improvement feedback (each limited to 1,000 characters). The written feedback is returned only by the authenticated dashboard and its SUS CSV export.
 - **findings** — the 6 planted issues (line/title/category). Server-only; not meant to be browsed as study data.
 - **researcher_access** — the server-only allowlist for the private dashboard. It contains the approved researcher email, never participant data.
 
 Join on participant ID across tables (via the Table Editor's relationships, or a `select ... join ...` query in the SQL Editor) when you're ready to analyse everything together.
+
+## Interpreting SUS results
+
+Keep all ten original SUS statements and five response choices unchanged. A score of 68 is a commonly cited reference point for interpreting the **aggregate** result; it is not a pass mark for an individual participant and is not shown on the participant thank-you page. Report the participant count, mean, median, range, and the optional written feedback alongside the SME interview themes. A lower result is valid evidence of usability issues to address in a future iteration.
 
 ## A privacy/security note
 

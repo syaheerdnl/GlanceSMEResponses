@@ -9,6 +9,10 @@
 
   var RESEARCHER_EMAIL = 'muhammadsyaheerdaniel@gmail.com';
   var SESSION_KEY = 'smeResearcherAccessToken_v1';
+  // A magic link may be requested while this static site is opened locally
+  // (file://) during researcher setup. Supabase cannot redirect back to a
+  // local file, so always use the authorised GitHub Pages callback instead.
+  var DEPLOYED_RESEARCHER_URL = 'https://syaheerdnl.github.io/GlanceSMEResponses/researcher.html';
   var results = null;
 
   function $(id) { return document.getElementById(id); }
@@ -32,7 +36,12 @@
   }
 
   function researcherUrl() {
-    return new URL('researcher.html', window.location.href).href;
+    var currentUrl = new URL('researcher.html', window.location.href);
+    if (currentUrl.origin === 'https://syaheerdnl.github.io' &&
+        currentUrl.pathname.indexOf('/GlanceSMEResponses/') === 0) {
+      return currentUrl.href;
+    }
+    return DEPLOYED_RESEARCHER_URL;
   }
 
   function getToken() {
@@ -236,7 +245,7 @@
 
   function susRows() {
     return filteredParticipants().filter(function (p) { return p.susScore !== null && p.susScore !== undefined; }).map(function (p) {
-      return [p.participantId, p.studyPath, p.sus1, p.sus2, p.sus3, p.sus4, p.sus5, p.sus6, p.sus7, p.sus8, p.sus9, p.sus10, p.susScore];
+      return [p.participantId, p.studyPath, p.sus1, p.sus2, p.sus3, p.sus4, p.sus5, p.sus6, p.sus7, p.sus8, p.sus9, p.sus10, p.susScore, p.susFeedbackDifficulty, p.susFeedbackImprovement];
     });
   }
 
@@ -263,7 +272,7 @@
       downloadCsv('glance-participants.csv', ['participant_name', 'participant_id', 'study_path', 'created_at', 'years_experience', 'platforms', 'role', 'language_familiarity', 'consented_at', 'sus_score', 'opened_at', 'review_completed_at', 'feedback_opened_at', 'fix_applied_at'], participantRows());
     });
     $('btn-export-sus').addEventListener('click', function () {
-      downloadCsv('glance-sus.csv', ['participant_id', 'study_path', 'sus1', 'sus2', 'sus3', 'sus4', 'sus5', 'sus6', 'sus7', 'sus8', 'sus9', 'sus10', 'sus_score'], susRows());
+      downloadCsv('glance-sus.csv', ['participant_id', 'study_path', 'sus1', 'sus2', 'sus3', 'sus4', 'sus5', 'sus6', 'sus7', 'sus8', 'sus9', 'sus10', 'sus_score', 'feedback_difficulty', 'feedback_improvement'], susRows());
     });
     $('btn-export-hands-on').addEventListener('click', function () {
       downloadCsv('glance-hands-on.csv', ['participant_id', 'study_path', 'sample_id', 'opened_at', 'review_completed_at', 'feedback_opened_at', 'fix_applied_at'], handsOnRows());

@@ -1416,6 +1416,17 @@ button.secondary:hover { background: #f3f2f1; color: #0b0c0c; border-color: #0b0
 .sus-likert .radio-option.selected { background: #0b0c0c; color: #ffffff; }
 .sus-likert .radio-option:hover { background: #505a5f; color: #ffffff; }
 
+.sus-feedback {
+  max-width: 720px;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 2px solid #0b0c0c;
+}
+.sus-feedback h3 { margin: 0 0 8px; }
+.sus-feedback h3 span { font-size: 0.9rem; font-weight: 400; }
+.sus-feedback label { display: block; margin: 20px 0 8px; font-weight: 700; }
+.sus-feedback textarea { min-height: 104px; }
+
 .cve-glance { --gl-border: #0b0c0c; --gl-sans: Arial, Helvetica, sans-serif; --gl-shadow: none; }
 .glance-panel { border-radius: 0; }
 

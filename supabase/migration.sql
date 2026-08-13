@@ -98,6 +98,8 @@ create table public.sus (
   sus7 smallint check (sus7 between 1 and 5), sus8 smallint check (sus8 between 1 and 5),
   sus9 smallint check (sus9 between 1 and 5), sus10 smallint check (sus10 between 1 and 5),
   sus_score numeric(5,2) not null,
+  feedback_difficulty text check (feedback_difficulty is null or char_length(feedback_difficulty) <= 1000),
+  feedback_improvement text check (feedback_improvement is null or char_length(feedback_improvement) <= 1000),
   constraint sus_participant_unique unique (participant_id)
 );
 
@@ -285,7 +287,7 @@ begin
   if p_accepted is distinct from true then
     return jsonb_build_object('ok', false, 'error', 'Explicit consent is required.');
   end if;
-  if p_consent_version is distinct from 'sme-web-consent-v3' then
+  if p_consent_version not in ('sme-web-consent-v1', 'sme-web-consent-v2', 'sme-web-consent-v3', 'sme-web-consent-v4') then
     return jsonb_build_object('ok', false, 'error', 'Unexpected consent form version.');
   end if;
 
@@ -385,15 +387,26 @@ grant execute on function public.submit_agreement(text, int, text, text, text) t
 -- score-1, even items contribute 5-score, sum * 2.5). p_scores[1] = SUS
 -- item 1, etc.
 create or replace function public.save_sus(
-  p_id text, p_scores int[]
+  p_id text, p_scores int[], p_feedback_difficulty text, p_feedback_improvement text
 ) returns jsonb language plpgsql security definer set search_path = '' as $$
-declare v_total numeric := 0; v_score numeric; i int;
+declare
+  v_total numeric := 0;
+  v_score numeric;
+  v_feedback_difficulty text;
+  v_feedback_improvement text;
+  i int;
 begin
   if p_id is null or p_id = '' then
     return jsonb_build_object('ok', false, 'error', 'Missing participant id.');
   end if;
   if p_scores is null or array_length(p_scores, 1) <> 10 then
     return jsonb_build_object('ok', false, 'error', 'Expected 10 SUS scores.');
+  end if;
+  if p_feedback_difficulty is not null and char_length(btrim(p_feedback_difficulty)) > 1000 then
+    return jsonb_build_object('ok', false, 'error', 'Optional difficulty feedback must be 1,000 characters or fewer.');
+  end if;
+  if p_feedback_improvement is not null and char_length(btrim(p_feedback_improvement)) > 1000 then
+    return jsonb_build_object('ok', false, 'error', 'Optional improvement feedback must be 1,000 characters or fewer.');
   end if;
   for i in 1..10 loop
     if p_scores[i] is null or p_scores[i] < 1 or p_scores[i] > 5 then
@@ -403,18 +416,33 @@ begin
     else v_total := v_total + (5 - p_scores[i]); end if;
   end loop;
   v_score := v_total * 2.5;
-  insert into public.sus (participant_id, sus1, sus2, sus3, sus4, sus5, sus6, sus7, sus8, sus9, sus10, sus_score)
+  v_feedback_difficulty := nullif(btrim(p_feedback_difficulty), '');
+  v_feedback_improvement := nullif(btrim(p_feedback_improvement), '');
+  insert into public.sus (participant_id, sus1, sus2, sus3, sus4, sus5, sus6, sus7, sus8, sus9, sus10, sus_score, feedback_difficulty, feedback_improvement)
   values (p_id, p_scores[1], p_scores[2], p_scores[3], p_scores[4], p_scores[5],
-          p_scores[6], p_scores[7], p_scores[8], p_scores[9], p_scores[10], v_score)
+          p_scores[6], p_scores[7], p_scores[8], p_scores[9], p_scores[10], v_score, v_feedback_difficulty, v_feedback_improvement)
   on conflict (participant_id) do update
     set sus1=excluded.sus1, sus2=excluded.sus2, sus3=excluded.sus3, sus4=excluded.sus4,
         sus5=excluded.sus5, sus6=excluded.sus6, sus7=excluded.sus7, sus8=excluded.sus8,
-        sus9=excluded.sus9, sus10=excluded.sus10, sus_score=excluded.sus_score, created_at=now();
+        sus9=excluded.sus9, sus10=excluded.sus10, sus_score=excluded.sus_score,
+        feedback_difficulty=excluded.feedback_difficulty, feedback_improvement=excluded.feedback_improvement,
+        created_at=now();
   return jsonb_build_object('ok', true, 'susScore', v_score);
 exception when foreign_key_violation then
   return jsonb_build_object('ok', false, 'error', 'Unknown participant id: ' || p_id);
 end; $$;
+
+-- Retain this wrapper for a browser tab that still has the prior JavaScript
+-- cached. New clients call the four-argument function above; an older client
+-- can finish its already-started SUS session without losing its score.
+create or replace function public.save_sus(
+  p_id text, p_scores int[]
+) returns jsonb language sql security definer set search_path = '' as $$
+  select public.save_sus(p_id, p_scores, null, null);
+$$;
+revoke all on function public.save_sus(text, int[], text, text) from public;
 revoke all on function public.save_sus(text, int[]) from public;
+grant execute on function public.save_sus(text, int[], text, text) to anon;
 grant execute on function public.save_sus(text, int[]) to anon;
 
 
@@ -516,6 +544,8 @@ begin
         'sus1', s.sus1, 'sus2', s.sus2, 'sus3', s.sus3, 'sus4', s.sus4, 'sus5', s.sus5,
         'sus6', s.sus6, 'sus7', s.sus7, 'sus8', s.sus8, 'sus9', s.sus9, 'sus10', s.sus10,
         'susScore', s.sus_score,
+        'susFeedbackDifficulty', s.feedback_difficulty,
+        'susFeedbackImprovement', s.feedback_improvement,
         'sampleId', h.sample_id,
         'openedAt', h.opened_at,
         'reviewCompletedAt', h.review_completed_at,
