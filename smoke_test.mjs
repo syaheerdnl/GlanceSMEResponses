@@ -184,6 +184,23 @@ assert((await page.locator('#code-listing .code-line.current').textContent()).tr
 assert(await page.locator('#code-listing .code-line.flagged').count() === 0, 'no line is category-colored yet — nothing has been revealed');
 assert(await page.locator('.step[data-step="cve"].current').count() === 1, 'stepper shows Category Check as current step');
 assert(await page.locator('.step[data-step="intake"].done').count() === 1, 'stepper shows Background as done');
+
+// The fixed category key is deliberately color-coded before a guess. It helps
+// participants distinguish the four available taxonomy choices, without
+// revealing which one belongs to this particular finding.
+const CATEGORY_SWATCHES = {
+  'Code Quality': 'rgb(191, 79, 75)',
+  'Bugs': 'rgb(168, 121, 30)',
+  'Optimization': 'rgb(60, 127, 99)',
+  'Readability': 'rgb(110, 99, 166)'
+};
+for (const [category, color] of Object.entries(CATEGORY_SWATCHES)) {
+  const option = page.locator('#guess-options .radio-option', { has: page.locator('input[value="' + category + '"]') });
+  const optionColor = await option.evaluate((el) => getComputedStyle(el).color);
+  const inputBorderColor = await option.locator('input').evaluate((el) => getComputedStyle(el).borderTopColor);
+  assert(optionColor === color, category + ' guess label uses its fixed taxonomy color');
+  assert(inputBorderColor === color, category + ' guess control uses its fixed taxonomy color');
+}
 await shot('real-3-cve-before-reveal.png');
 
 // --- 3b. Boundary check: before any guess, the category must not be

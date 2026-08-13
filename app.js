@@ -128,10 +128,10 @@
   var CATEGORIES = ['Code Quality', 'Bugs', 'Optimization', 'Readability'];
 
   // Real Glance category colors (glance/lib/theme/colors.dart — GlanceColors.category).
-  // These are the same 4 categories already fixed by this project's taxonomy; only
-  // the color mapping is new. A category color is only ever assigned to a DOM element
-  // after that finding's guess has been recorded server-side (see revealFinding) —
-  // that's the same blind-reveal boundary the rest of the app already enforces.
+  // These are the same 4 categories already fixed by this project's taxonomy. Static
+  // labels may use these colors as a category key, but a finding-specific color is
+  // only assigned after that finding's guess has been recorded server-side (see
+  // revealFinding) — the blind-reveal boundary remains unchanged.
   var CATEGORY_COLORS = {
     'Code Quality': '#BF4F4B',
     'Bugs': '#A8791E',
@@ -290,11 +290,20 @@
   // property of the category system itself, not tied to any one finding's
   // actual answer. Anything that isn't a category name (Yes/No, 1-5 SUS
   // scale, etc.) renders as plain text, unaffected.
+  function categoryClassName(category) {
+    return 'category-' + category.toLowerCase().replace(/\s+/g, '-');
+  }
+
+  function addCategoryClass(element, category) {
+    if (!CATEGORY_COLORS[category]) return;
+    element.classList.add('category-choice');
+    element.classList.add(categoryClassName(category));
+  }
+
   function categoryLabelNode(text) {
     if (CATEGORY_COLORS[text]) {
       var span = document.createElement('span');
-      span.style.color = CATEGORY_COLORS[text];
-      span.style.fontWeight = '700';
+      span.className = 'category-name ' + categoryClassName(text);
       span.textContent = text;
       return span;
     }
@@ -304,6 +313,7 @@
   function makeRadioOption(groupName, value, labelText, onPick) {
     var label = document.createElement('label');
     label.className = 'radio-option';
+    addCategoryClass(label, value);
     var input = document.createElement('input');
     input.type = 'radio';
     input.name = groupName;
@@ -721,6 +731,7 @@
 
       var row = document.createElement('div');
       row.className = 'rank-row';
+      addCategoryClass(row, cat);
       var checked = state.couldAlsoBeOrder.indexOf(cat) !== -1;
       row.classList.toggle('active', checked);
 
