@@ -139,7 +139,9 @@
     'Readability': '#6E63A6'
   };
 
-  var STEP_ORDER = ['intake', 'demo', 'interview', 'cve', 'sus', 'done'];
+  var STEP_ORDER = ['intake', 'demo', 'interview', 'cve', 'prototype', 'sus', 'done'];
+  var PROTOTYPE_SAMPLE_ID = 'mysejahtera-alpha-dart-v1';
+  var PROTOTYPE_MILESTONES = ['opened', 'review-completed', 'feedback-opened', 'fix-applied'];
 
   // ---- State (live, in-memory) ----
 
@@ -178,6 +180,7 @@
       section: 'intake',
       interviewDraft: { q2: '', q3: '', q4: '', q5: '', q6: '' },
       cve: { findingIndex: 0, guessSubmitted: false, revealData: null, revealedFindings: {}, allDone: false },
+      prototype: { nonce: null, milestones: { opened: false, 'review-completed': false, 'feedback-opened': false, 'fix-applied': false } },
       susDraft: new Array(SUS_ITEMS.length).fill(null)
     };
   }
@@ -196,6 +199,8 @@
       base.section = parsed.section || 'intake';
       base.interviewDraft = Object.assign(base.interviewDraft, parsed.interviewDraft || {});
       base.cve = Object.assign(base.cve, parsed.cve || {});
+      base.prototype = Object.assign(base.prototype, parsed.prototype || {});
+      base.prototype.milestones = Object.assign(base.prototype.milestones, (parsed.prototype && parsed.prototype.milestones) || {});
       base.susDraft = parsed.susDraft || base.susDraft;
       return base;
     } catch (e) {
@@ -271,7 +276,7 @@
   }
 
   function setBadges(id) {
-    ['id-badge-demo', 'id-badge-1', 'id-badge-2', 'id-badge-3'].forEach(function (b) {
+    ['id-badge-demo', 'id-badge-1', 'id-badge-2', 'id-badge-prototype', 'id-badge-3'].forEach(function (b) {
       var el = $(b);
       if (el) el.textContent = id;
     });
@@ -371,7 +376,8 @@
     saveInterview:   { fn: 'save_interview',   params: { id: 'p_id', q2: 'p_q2', q3: 'p_q3', q4: 'p_q4', q5: 'p_q5', q6: 'p_q6' } },
     submitGuess:     { fn: 'submit_guess',     params: { id: 'p_id', findingNum: 'p_finding_num', guess: 'p_guess' } },
     submitAgreement: { fn: 'submit_agreement', params: { id: 'p_id', findingNum: 'p_finding_num', agreement: 'p_agreement', correctCategory: 'p_correct_category', couldAlsoBe: 'p_could_also_be' } },
-    saveSUS:         { fn: 'save_sus',         params: { id: 'p_id', scores: 'p_scores' } }
+    saveSUS:         { fn: 'save_sus',         params: { id: 'p_id', scores: 'p_scores' } },
+    saveHandsOnMilestone: { fn: 'save_hands_on_milestone', params: { id: 'p_id', milestone: 'p_milestone', sampleId: 'p_sample_id' } }
   };
 
   function callBackend(action, payload) {
@@ -862,11 +868,11 @@
         });
     });
 
-    $('btn-to-sus').addEventListener('click', function () {
-      session.section = 'sus';
+    $('btn-to-prototype').addEventListener('click', function () {
+      session.section = 'prototype';
       saveSession();
-      showSection('section-sus');
-      renderSUS();
+      showSection('section-prototype');
+      openPrototype();
     });
   }
 
@@ -945,7 +951,111 @@
     }
   }
 
-  // ---- Section 3: SUS ----
+  // ---- Section 3: Hands-on prototype ----
+  //
+  // The iframe receives only a per-session random nonce in its URL. In
+  // particular, the participant ID and all questionnaire/CVE data stay in
+  // this page and are never disclosed to Glance. The child uses the nonce in
+  // a same-origin postMessage when the participant completes each action.
+  // Messages are accepted only from this exact iframe window, at this exact
+  // origin, with the matching nonce.
+
+  var prototypeSaving = {};
+
+  function randomPrototypeNonce() {
+    var bytes = new Uint8Array(24);
+    if (!window.crypto || !window.crypto.getRandomValues) {
+      throw new Error('This browser cannot create the secure study session required for the prototype.');
+    }
+    window.crypto.getRandomValues(bytes);
+    return Array.prototype.map.call(bytes, function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+  }
+
+  function prototypeComplete() {
+    return PROTOTYPE_MILESTONES.every(function (milestone) {
+      return session.prototype && session.prototype.milestones && session.prototype.milestones[milestone];
+    });
+  }
+
+  function renderPrototypeProgress() {
+    var milestones = (session.prototype && session.prototype.milestones) || {};
+    document.querySelectorAll('#prototype-progress [data-milestone]').forEach(function (el) {
+      var done = !!milestones[el.dataset.milestone];
+      el.classList.toggle('complete', done);
+      el.setAttribute('aria-current', done ? 'true' : 'false');
+    });
+    $('btn-prototype-continue').disabled = !prototypeComplete();
+    if (prototypeComplete()) {
+      $('prototype-status').textContent = 'All task actions recorded. You can now continue to the SUS questionnaire.';
+      $('prototype-status').classList.remove('hidden');
+    } else {
+      $('prototype-status').classList.add('hidden');
+    }
+  }
+
+  function openPrototype() {
+    try {
+      if (!session.prototype.nonce) {
+        session.prototype.nonce = randomPrototypeNonce();
+        saveSession();
+      }
+      clearError('prototype-error');
+      renderPrototypeProgress();
+      var frame = $('study-prototype-frame');
+      var target = new URL('prototype/', window.location.href);
+      target.searchParams.set('studyNonce', session.prototype.nonce);
+      if (frame.src !== target.href) frame.src = target.href;
+    } catch (err) {
+      showError('prototype-error', err.message || 'Could not start the hands-on prototype.');
+    }
+  }
+
+  function recordPrototypeMilestone(milestone) {
+    if (PROTOTYPE_MILESTONES.indexOf(milestone) === -1 || prototypeSaving[milestone]) return;
+    if (session.prototype.milestones[milestone]) return;
+
+    prototypeSaving[milestone] = true;
+    clearError('prototype-error');
+    callBackend('saveHandsOnMilestone', {
+      id: state.participantId,
+      milestone: milestone,
+      sampleId: PROTOTYPE_SAMPLE_ID
+    })
+      .then(function () {
+        session.prototype.milestones[milestone] = true;
+        saveSession();
+        renderPrototypeProgress();
+      })
+      .catch(function (err) {
+        showError('prototype-error', 'Could not record this task action. Please repeat the action: ' + err.message);
+      })
+      .finally(function () {
+        prototypeSaving[milestone] = false;
+      });
+  }
+
+  function initPrototype() {
+    window.addEventListener('message', function (event) {
+      var frame = $('study-prototype-frame');
+      var message = event.data;
+      if (!frame || event.source !== frame.contentWindow) return;
+      if (event.origin !== window.location.origin) return;
+      if (!message || message.type !== 'glance-study:milestone') return;
+      if (!session.prototype || message.nonce !== session.prototype.nonce) return;
+      recordPrototypeMilestone(message.milestone);
+    });
+
+    $('btn-prototype-continue').addEventListener('click', function () {
+      if (!prototypeComplete()) return;
+      session.section = 'sus';
+      saveSession();
+      showSection('section-sus');
+      renderSUS();
+      restoreSUSDraft();
+    });
+  }
+
+  // ---- Section 4: SUS ----
 
   function renderSUS() {
     var container = $('sus-items');
@@ -986,6 +1096,16 @@
   function initSUS() {
     $('btn-sus-submit').addEventListener('click', function () {
       clearError('sus-error');
+      // Client-side session recovery must never provide a route around the
+      // supervised task. This is also checked when a stale saved `sus`
+      // section is restored below.
+      if (!prototypeComplete()) {
+        session.section = 'prototype';
+        saveSession();
+        showSection('section-prototype');
+        openPrototype();
+        return;
+      }
       var scores = [];
       for (var i = 0; i < SUS_ITEMS.length; i++) {
         var row = document.querySelectorAll('#sus-items > div')[i].querySelector('.likert-row');
@@ -1030,6 +1150,7 @@
     initDemo();
     initInterview();
     initCVE();
+    initPrototype();
     initSUS();
 
     var startOverBtn = $('btn-start-over');
@@ -1056,10 +1177,20 @@
       } else if (session.section === 'cve') {
         showSection('section-cve');
         restoreCVESection();
+      } else if (session.section === 'prototype') {
+        showSection('section-prototype');
+        openPrototype();
       } else if (session.section === 'sus') {
-        showSection('section-sus');
-        renderSUS();
-        restoreSUSDraft();
+        if (prototypeComplete()) {
+          showSection('section-sus');
+          renderSUS();
+          restoreSUSDraft();
+        } else {
+          session.section = 'prototype';
+          saveSession();
+          showSection('section-prototype');
+          openPrototype();
+        }
       } else {
         showSection('section-intake');
       }

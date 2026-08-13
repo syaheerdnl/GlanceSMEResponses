@@ -25,8 +25,9 @@
   <div class="step" data-step="demo"><span class="step-dot">2</span><span class="step-label">Demo</span></div>
   <div class="step" data-step="interview"><span class="step-dot">3</span><span class="step-label">Interview</span></div>
   <div class="step" data-step="cve"><span class="step-dot">4</span><span class="step-label">Category Check</span></div>
-  <div class="step" data-step="sus"><span class="step-dot">5</span><span class="step-label">SUS</span></div>
-  <div class="step" data-step="done"><span class="step-dot">6</span><span class="step-label">Done</span></div>
+  <div class="step" data-step="prototype"><span class="step-dot">5</span><span class="step-label">Hands-on</span></div>
+  <div class="step" data-step="sus"><span class="step-dot">6</span><span class="step-label">SUS</span></div>
+  <div class="step" data-step="done"><span class="step-dot">7</span><span class="step-label">Done</span></div>
 </nav>
 
 <main>
@@ -46,6 +47,7 @@
         <li>watch a demonstration of the application</li>
         <li>discuss the usefulness, clarity, and quality of its feedback</li>
         <li>classify six review findings before the application's category is revealed</li>
+        <li>complete one guided hands-on task in the application</li>
         <li>complete the System Usability Scale questionnaire</li>
       </ul>
 
@@ -249,7 +251,7 @@
 
             <div id="cve-done" class="hidden">
               <p><strong>All six findings complete.</strong></p>
-              <button id="btn-to-sus">Continue to SUS</button>
+              <button id="btn-to-prototype">Continue to hands-on prototype</button>
             </div>
           </div>
         </div>
@@ -257,7 +259,29 @@
     </div>
   </section>
 
-  <!-- ============ SECTION 3: SUS ============ -->
+  <!-- ============ SECTION 3: HANDS-ON PROTOTYPE ============ -->
+  <section id="section-prototype" class="section">
+    <div class="card prototype-card">
+      <p class="pill" id="id-badge-prototype"></p>
+      <h2>Hands-on Prototype</h2>
+      <p class="help">Use the embedded Glance study prototype to review the fixed <strong>MySejahteraAlpha.dart</strong> sample. Run the review, open a feedback item, and apply one suggested fix. Your questionnaire is unlocked automatically once all four actions are completed.</p>
+
+      <ol class="prototype-progress" id="prototype-progress" aria-label="Hands-on task progress">
+        <li data-milestone="opened">Prototype opened</li>
+        <li data-milestone="review-completed">Review completed</li>
+        <li data-milestone="feedback-opened">Feedback opened</li>
+        <li data-milestone="fix-applied">Suggested fix applied</li>
+      </ol>
+      <div class="status hidden" id="prototype-status" aria-live="polite"></div>
+      <div class="error hidden" id="prototype-error" role="alert"></div>
+      <iframe id="study-prototype-frame" title="Glance hands-on study prototype" allow="clipboard-read; clipboard-write" referrerpolicy="same-origin"></iframe>
+      <div class="button-row prototype-actions">
+        <button id="btn-prototype-continue" disabled>Continue to SUS</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SECTION 4: SUS ============ -->
   <section id="section-sus" class="section">
     <div class="card">
       <p class="pill" id="id-badge-3"></p>

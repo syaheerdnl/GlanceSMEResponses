@@ -1,9 +1,40 @@
 import { chromium } from 'playwright';
+import http from 'node:http';
+import fs from 'node:fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const fileUrl = 'file://' + path.join(__dirname, 'index.html');
+// Use a small same-origin static server rather than file://. The production
+// iframe contract deliberately requires an exact origin match, while file://
+// documents have opaque origins and cannot faithfully exercise that check.
+const server = http.createServer((req, res) => {
+  const requestPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+  const relativePath = requestPath === '/' ? 'index.html' : requestPath.replace(/^\/+/, '');
+  const target = path.resolve(__dirname, relativePath);
+  if (!target.startsWith(__dirname + path.sep) && target !== path.join(__dirname, 'index.html')) {
+    res.writeHead(403).end();
+    return;
+  }
+  fs.readFile(target, (err, content) => {
+    if (err) {
+      // Flutter's real output is copied into prototype/ only after its web
+      // build. Until then this same-origin fixture lets the questionnaire
+      // test exercise the parent-side iframe contract without a 404 noise.
+      if (requestPath.startsWith('/prototype/')) {
+        res.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html><title>Prototype fixture</title>');
+        return;
+      }
+      res.writeHead(404).end();
+      return;
+    }
+    const type = target.endsWith('.js') ? 'application/javascript' : target.endsWith('.css') ? 'text/css' : 'text/html';
+    res.writeHead(200, { 'content-type': type }).end(content);
+  });
+});
+await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+const { port } = server.address();
+const fileUrl = 'http://127.0.0.1:' + port + '/';
 
 // A fake config.js loaded via addInitScript, so SUPABASE_URL/SUPABASE_ANON_KEY
 // look configured and app.js's real fetch-driven logic runs (not the
@@ -25,6 +56,7 @@ const FINDINGS = {
 
 var submitGuessCallCount = {}; // findingNum -> count, so the resume test can prove no duplicate POST
 var assignIdCallCount = 0; // proves the Back-to-Intake guard doesn't mint a second participant ID
+var handsOnMilestoneCallCount = {}; // milestone -> count; the task RPC must be idempotent client-side too
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 900, height: 1100 } });
@@ -64,6 +96,11 @@ await page.route('**/rest/v1/rpc/*', async (route) => {
       break;
     case 'save_sus':
       resp = { ok: true, susScore: 82.5 };
+      break;
+    case 'save_hands_on_milestone':
+      assert(body.p_sample_id === 'mysejahtera-alpha-dart-v1', 'hands-on RPC sends only the fixed sample id');
+      handsOnMilestoneCallCount[body.p_milestone] = (handsOnMilestoneCallCount[body.p_milestone] || 0) + 1;
+      resp = { ok: true };
       break;
     default:
       resp = { ok: false, error: 'unhandled RPC function in stub: ' + fnName };
@@ -286,7 +323,50 @@ for (let n = 1; n <= 6; n++) {
   assert(submitGuessCallCount[n] === 1, 'finding ' + n + ' got exactly one submitGuess POST across the whole run');
 }
 
-await page.click('#btn-to-sus');
+await page.click('#btn-to-prototype');
+await page.waitForSelector('#section-prototype.active');
+assert(await page.locator('#study-prototype-frame').count() === 1, 'hands-on page contains the embedded Glance iframe');
+assert(await page.locator('#btn-prototype-continue:disabled').count() === 1, 'SUS remains locked before the hands-on task is complete');
+
+const prototypeNonce = await page.evaluate(() => JSON.parse(localStorage.getItem('smeSession_v1')).prototype.nonce);
+assert(typeof prototypeNonce === 'string' && prototypeNonce.length === 48, 'parent generated and persisted a 24-byte prototype nonce');
+
+async function sendPrototypeMilestone(milestone, nonce = prototypeNonce) {
+  await page.locator('#study-prototype-frame').evaluate((frame, payload) => {
+    return new Promise((resolve) => {
+      const encoded = JSON.stringify({ type: 'glance-study:milestone', nonce: payload.nonce, milestone: payload.milestone });
+      frame.onload = resolve;
+      frame.srcdoc = '<script>parent.postMessage(' + encoded + ',"*");</script>';
+    });
+  }, { milestone, nonce });
+  await page.waitForTimeout(150);
+}
+
+await sendPrototypeMilestone('opened', 'incorrect-nonce');
+assert(!handsOnMilestoneCallCount.opened, 'wrong-nonce iframe message is ignored');
+await sendPrototypeMilestone('opened');
+assert(handsOnMilestoneCallCount.opened === 1, 'opened milestone recorded once through the task RPC');
+assert(await page.locator('#prototype-progress [data-milestone="opened"].complete').count() === 1, 'opened status is displayed after the RPC succeeds');
+await sendPrototypeMilestone('review-completed');
+await sendPrototypeMilestone('feedback-opened');
+assert(handsOnMilestoneCallCount['review-completed'] === 1 && handsOnMilestoneCallCount['feedback-opened'] === 1, 'review and feedback milestones are each recorded once');
+
+// A reload after partial task completion resumes inside the iframe step and
+// preserves only the parent-side milestone state; it does not expose a
+// participant ID or response data to the iframe.
+await page.reload();
+await page.waitForTimeout(300);
+assert(await page.locator('#section-prototype.active').count() === 1, 'reload resumes on the hands-on step');
+assert(await page.locator('#prototype-progress [data-milestone="review-completed"].complete').count() === 1, 'partial hands-on progress survives a questionnaire reload');
+assert(await page.locator('#btn-prototype-continue:disabled').count() === 1, 'SUS stays locked after an incomplete resumed task');
+
+await sendPrototypeMilestone('fix-applied');
+await sendPrototypeMilestone('fix-applied');
+assert(handsOnMilestoneCallCount['fix-applied'] === 1, 'duplicate fix milestone is not POSTed again');
+assert(await page.locator('#btn-prototype-continue:not(:disabled)').count() === 1, 'SUS unlocks only after all four milestones are recorded');
+await shot('real-5-prototype.png');
+
+await page.click('#btn-prototype-continue');
 await page.waitForSelector('#section-sus.active');
 await page.waitForTimeout(350);
 assert((await page.locator('#sus-items > div').count()) === 10, 'all 10 SUS items rendered');
@@ -329,4 +409,5 @@ console.log('errors observed:', errors);
 assert(errors.length === 0, 'no console/page errors during the whole flow');
 
 await browser.close();
+await new Promise((resolve) => server.close(resolve));
 console.log('SMOKE TEST PASSED');

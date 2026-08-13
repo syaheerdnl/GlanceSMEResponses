@@ -1430,3 +1430,84 @@ footer {
   .sus-likert .radio-option { min-height: 56px; font-size: 0.65rem; }
   footer { padding: 20px 16px; }
 }
+
+/* Hands-on prototype: the task area is deliberately a plain framed working
+   surface, not a decorative card. Its state remains readable alongside the
+   embedded app at desktop and phone widths. */
+.prototype-card { max-width: 1100px; }
+.prototype-progress {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 24px 0 18px;
+  padding: 0;
+  list-style: none;
+  border: 1px solid #0b0c0c;
+}
+.prototype-progress li {
+  position: relative;
+  min-height: 60px;
+  padding: 12px 12px 12px 38px;
+  border-right: 1px solid #0b0c0c;
+  color: #505a5f;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.prototype-progress li:last-child { border-right: 0; }
+.prototype-progress li::before {
+  content: '';
+  position: absolute;
+  top: 13px;
+  left: 13px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #505a5f;
+  border-radius: 50%;
+}
+.prototype-progress li.complete { background: #00703c; color: #ffffff; }
+.prototype-progress li.complete::before {
+  content: '✓';
+  display: grid;
+  place-items: center;
+  border-color: #ffffff;
+  color: #ffffff;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+#study-prototype-frame {
+  display: block;
+  width: 100%;
+  height: min(820px, 78vh);
+  min-height: 680px;
+  border: 1px solid #0b0c0c;
+  border-radius: 0;
+  background: #ffffff;
+}
+.prototype-actions { margin-top: 16px; }
+.prototype-actions button:disabled {
+  background: #b1b4b6;
+  color: #383f43;
+  cursor: not-allowed;
+}
+.prototype-actions button:disabled:hover,
+.prototype-actions button:disabled:focus-visible {
+  background: #b1b4b6;
+  outline: 0;
+}
+
+@media (max-width: 760px) {
+  .prototype-progress { grid-template-columns: 1fr 1fr; }
+  .prototype-progress li:nth-child(2) { border-right: 0; }
+  .prototype-progress li:nth-child(-n + 2) { border-bottom: 1px solid #0b0c0c; }
+  #study-prototype-frame { height: 760px; min-height: 620px; }
+}
+
+@media (max-width: 420px) {
+  .prototype-progress { grid-template-columns: 1fr; }
+  .prototype-progress li,
+  .prototype-progress li:nth-child(2) { border-right: 0; border-bottom: 1px solid #0b0c0c; }
+  .prototype-progress li:last-child { border-bottom: 0; }
+  #study-prototype-frame { height: 700px; min-height: 560px; }
+}
