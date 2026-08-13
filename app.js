@@ -142,6 +142,7 @@
   var STEP_ORDER = ['intake', 'demo', 'interview', 'cve', 'prototype', 'sus', 'done'];
   var PROTOTYPE_SAMPLE_ID = 'mysejahtera-alpha-dart-v1';
   var PROTOTYPE_MILESTONES = ['opened', 'review-completed', 'feedback-opened', 'fix-applied'];
+  var CONSENT_VERSION = 'sme-web-consent-v1';
 
   // ---- State (live, in-memory) ----
 
@@ -178,6 +179,7 @@
     return {
       participantId: null,
       section: 'intake',
+      consent: { accepted: false, saved: false, version: CONSENT_VERSION },
       interviewDraft: { q2: '', q3: '', q4: '', q5: '', q6: '' },
       cve: { findingIndex: 0, guessSubmitted: false, revealData: null, revealedFindings: {}, allDone: false },
       prototype: { nonce: null, milestones: { opened: false, 'review-completed': false, 'feedback-opened': false, 'fix-applied': false } },
@@ -197,6 +199,7 @@
       var base = emptySession();
       base.participantId = parsed.participantId;
       base.section = parsed.section || 'intake';
+      base.consent = Object.assign(base.consent, parsed.consent || {});
       base.interviewDraft = Object.assign(base.interviewDraft, parsed.interviewDraft || {});
       base.cve = Object.assign(base.cve, parsed.cve || {});
       base.prototype = Object.assign(base.prototype, parsed.prototype || {});
@@ -237,9 +240,9 @@
   function showSection(id) {
     document.querySelectorAll('.section').forEach(function (s) { s.classList.remove('active'); });
     $(id).classList.add('active');
-    var isCover = id === 'section-cover';
-    $('stepper').classList.toggle('hidden', isCover);
-    if (!isCover) updateStepper(id.replace('section-', ''));
+    var isPreIntake = id === 'section-cover' || id === 'section-consent';
+    $('stepper').classList.toggle('hidden', isPreIntake);
+    if (!isPreIntake) updateStepper(id.replace('section-', ''));
   }
 
   function updateStepper(activeStep) {
@@ -373,6 +376,7 @@
 
   var ACTION_MAP = {
     assignId:        { fn: 'assign_id',        params: { yearsExperience: 'p_years_experience', platforms: 'p_platforms', role: 'p_role' } },
+    saveConsent:     { fn: 'save_consent',     params: { id: 'p_id', accepted: 'p_accepted', version: 'p_consent_version' } },
     saveInterview:   { fn: 'save_interview',   params: { id: 'p_id', q2: 'p_q2', q3: 'p_q3', q4: 'p_q4', q5: 'p_q5', q6: 'p_q6' } },
     submitGuess:     { fn: 'submit_guess',     params: { id: 'p_id', findingNum: 'p_finding_num', guess: 'p_guess' } },
     submitAgreement: { fn: 'submit_agreement', params: { id: 'p_id', findingNum: 'p_finding_num', agreement: 'p_agreement', correctCategory: 'p_correct_category', couldAlsoBe: 'p_could_also_be' } },
@@ -432,7 +436,74 @@
 
   function initCover() {
     $('btn-cover-start').addEventListener('click', function () {
-      showSection('section-intake');
+      showSection('section-consent');
+    });
+  }
+
+  // ---- Participant consent ----
+  // Consent is read before Intake, then written against the anonymous
+  // participant ID immediately after assign_id succeeds. No name or other
+  // participant-entered answer is included in the consent RPC.
+
+  function saveConsentRecord() {
+    if (!state.participantId || !session.consent.accepted) {
+      return Promise.reject(new Error('Consent must be confirmed before the interview can begin.'));
+    }
+    return callBackend('saveConsent', {
+      id: state.participantId,
+      accepted: true,
+      version: CONSENT_VERSION
+    }).then(function () {
+      session.consent.saved = true;
+      session.consent.version = CONSENT_VERSION;
+      saveSession();
+    });
+  }
+
+  function enterDemoAfterConsent() {
+    session.section = 'demo';
+    saveSession();
+    showSection('section-demo');
+  }
+
+  function initConsent() {
+    $('btn-consent-decline').addEventListener('click', function () {
+      $('consent-agree').checked = false;
+      clearError('consent-error');
+      $('consent-declined').classList.remove('hidden');
+    });
+
+    $('btn-consent-continue').addEventListener('click', function () {
+      clearError('consent-error');
+      $('consent-declined').classList.add('hidden');
+      if (!$('consent-agree').checked) {
+        showError('consent-error', 'Please confirm your consent before continuing.');
+        return;
+      }
+
+      session.consent.accepted = true;
+      session.consent.saved = false;
+      session.consent.version = CONSENT_VERSION;
+      // There is no participant ID yet during a new session, so this page
+      // does not write a record prematurely. Intake creates the anonymous ID
+      // and then saveConsentRecord writes the timestamp before Demo opens.
+      if (!state.participantId) {
+        showSection('section-intake');
+        return;
+      }
+
+      var btn = $('btn-consent-continue');
+      btn.disabled = true;
+      btn.textContent = 'Recording…';
+      saveConsentRecord()
+        .then(enterDemoAfterConsent)
+        .catch(function (err) {
+          showError('consent-error', 'Could not record consent: ' + err.message);
+        })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = 'I consent and continue';
+        });
     });
   }
 
@@ -471,14 +542,32 @@
     $('btn-intake-submit').addEventListener('click', function () {
       clearError('intake-error');
 
+      if (!session.consent.accepted) {
+        showSection('section-consent');
+        return;
+      }
+
       // A participant ID is only ever assigned once. Reaching Intake again
       // via the Back button (from Demo) must not re-call assignId — unlike
       // saveInterview, assignId always inserts a fresh row, so calling it
       // twice would mint a second SME-N for the same person. Just move on.
       if (state.participantId) {
-        session.section = 'demo';
-        saveSession();
-        showSection('section-demo');
+        if (session.consent.saved) {
+          enterDemoAfterConsent();
+          return;
+        }
+        var existingBtn = $('btn-intake-submit');
+        existingBtn.disabled = true;
+        existingBtn.textContent = 'Recording consent…';
+        saveConsentRecord()
+          .then(enterDemoAfterConsent)
+          .catch(function (err) {
+            showError('intake-error', 'Could not record consent: ' + err.message);
+          })
+          .finally(function () {
+            existingBtn.disabled = false;
+            existingBtn.textContent = 'Continue';
+          });
         return;
       }
 
@@ -509,9 +598,15 @@
           state.participantId = data.id;
           setBadges(data.id);
           session.participantId = data.id;
-          session.section = 'demo';
+          // Persist the assigned ID before the second RPC. If the network
+          // drops while recording consent, a reload can retry that idempotent
+          // RPC without ever minting another participant ID.
+          session.section = 'intake';
           saveSession();
-          showSection('section-demo');
+          return saveConsentRecord();
+        })
+        .then(function () {
+          enterDemoAfterConsent();
         })
         .catch(function (err) {
           showError('intake-error', 'Could not save your details: ' + err.message);
@@ -1146,6 +1241,7 @@
     }
 
     initCover();
+    initConsent();
     initIntake();
     initDemo();
     initInterview();
@@ -1169,7 +1265,15 @@
       setBadges(session.participantId);
       showResumeBanner(session.participantId);
 
-      if (session.section === 'demo') {
+      // A session created before consent was recorded, or one interrupted
+      // between assign_id and save_consent, must return to the consent gate.
+      // This keeps every response-bearing section behind a server-saved
+      // consent record.
+      if (!session.consent.accepted || !session.consent.saved) {
+        session.section = 'intake';
+        saveSession();
+        showSection('section-consent');
+      } else if (session.section === 'demo') {
         showSection('section-demo');
       } else if (session.section === 'interview') {
         showSection('section-interview');

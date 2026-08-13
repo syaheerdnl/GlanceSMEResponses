@@ -61,6 +61,39 @@
     </div>
   </section>
 
+  <!-- ============ PARTICIPANT CONSENT: REQUIRED BEFORE INTAKE ============ -->
+  <section id="section-consent" class="section" aria-labelledby="consent-title">
+    <div class="card consent-card">
+      <p class="pill">Before taking part</p>
+      <h2 id="consent-title">Participant consent</h2>
+      <p>Before answering, please read the following information. Ask the researcher any questions before continuing.</p>
+
+      <div class="consent-summary">
+        <h3>Purpose and activities</h3>
+        <p>This study evaluates Glance, a mobile AI-assisted code review application for Dart and Kotlin. The session includes a demonstration, interview questions, a category-validation exercise, one guided hands-on task, and the System Usability Scale questionnaire.</p>
+
+        <h3>What is recorded</h3>
+        <p>Your professional background, interview responses, category-validation answers, hands-on task milestone timestamps, and SUS responses will be recorded under an anonymous participant ID. Your name is used only on screen to confirm the interview participant and is not saved in the study database.</p>
+
+        <h3>Your choice</h3>
+        <p>Taking part is voluntary. You may ask to pause or stop before submitting an answer. The application is being evaluated, not your professional performance.</p>
+      </div>
+
+      <label class="checkbox-inline consent-check">
+        <input type="checkbox" id="consent-agree">
+        I have read the information above, had the opportunity to ask questions, and voluntarily agree to take part in this study.
+      </label>
+      <p class="help">Consent version: SME-web-consent-v1. The consent timestamp and version are recorded after your anonymous Participant ID is assigned.</p>
+
+      <div id="consent-error" class="error hidden" role="alert"></div>
+      <div id="consent-declined" class="status hidden">No response has been saved. You may close this page or speak with the researcher.</div>
+      <div class="button-row">
+        <button type="button" class="secondary" id="btn-consent-decline">I do not consent</button>
+        <button id="btn-consent-continue">I consent and continue</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ SECTION 0: INTAKE ============ -->
   <section id="section-intake" class="section">
     <div class="card">

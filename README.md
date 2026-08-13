@@ -32,14 +32,15 @@ if you'd rather begin fresh.
 | `config.js` | **Edit this** — holds the Supabase project URL and anon (public) key |
 | `supabase/migration.sql` | The backend — run this once in your Supabase project's SQL Editor |
 | `supabase/003_add_hands_on_task.sql` | Incremental migration for an already-live study project |
+| `supabase/004_add_participant_consent.sql` | Incremental migration for the recorded consent gate |
 
 ## Part 1 — Deploy the backend (Supabase)
 
 1. Go to [supabase.com](https://supabase.com) and sign in (or create a free account).
 2. Click **New Project**. Give it a name (e.g. "SME Interview Study"), set a database password (save it somewhere safe — you likely won't need it day-to-day, but you will if you ever need direct DB access), pick a region, and create it. Provisioning takes a minute or two.
-3. In the project dashboard, open the **SQL Editor** (left sidebar), click **New query**, paste in the entire contents of `supabase/migration.sql`, and click **Run**. This creates all 6 tables, locks every one of them down with Row Level Security (so nothing is readable/writable except through the functions below), seeds the 6 findings, and creates the 6 functions the frontend calls.
-4. For an already-live project, run `supabase/003_add_hands_on_task.sql` once too. It adds only the fixed-sample milestone record and its RPC.
-5. Verify it worked: **Table Editor** (left sidebar) should now show `intake`, `interview`, `category_validation`, `hands_on_task`, `sus`, and `findings`. **Database > Functions** should list `assign_id`, `save_interview`, `submit_guess`, `submit_agreement`, `save_hands_on_milestone`, `save_sus`.
+3. In the project dashboard, open the **SQL Editor** (left sidebar), click **New query**, paste in the entire contents of `supabase/migration.sql`, and click **Run**. This creates all 7 tables, locks every one of them down with Row Level Security (so nothing is readable/writable except through the functions below), seeds the 6 findings, and creates the 7 functions the frontend calls.
+4. For an already-live project, run `supabase/003_add_hands_on_task.sql` and `supabase/004_add_participant_consent.sql` once too. The latter adds the consent record and database triggers that reject any answer without consent.
+5. Verify it worked: **Table Editor** (left sidebar) should now show `intake`, `consent`, `interview`, `category_validation`, `hands_on_task`, `sus`, and `findings`. **Database > Functions** should list `assign_id`, `save_consent`, `save_interview`, `submit_guess`, `submit_agreement`, `save_hands_on_milestone`, `save_sus`.
 6. Go to **Project Settings > API**. Copy the **Project URL** and the **anon public** key — **not** the `service_role` key, which must never be used client-side. You'll paste these into `config.js` in Part 2.
 
 **If you ever need to change the functions later:** just re-run the `create or replace function ...` block for the one you changed, in the SQL Editor — unlike the old Apps Script setup, there's no separate "deploy a new version" step; changes take effect immediately.
@@ -66,13 +67,14 @@ Open the GitHub Pages URL (or just open `index.html` directly in a browser for a
 - If you see a "Setup needed" message instead of the intake form, `config.js` still has the placeholder values — go back to step 1 of Part 2.
 - Fill in the intake fields and submit — you should get assigned `SME-1` (or the next number, if the tables already have rows) and land on the interview section.
 - Check the Supabase **Table Editor** after a test run — the `intake` table should show your test row. If nothing shows up, check the **Logs** section in the Supabase dashboard (Logs > Postgres/API) for an error.
-- Complete the embedded hands-on task once. `hands_on_task` should receive only its fixed sample id and four timestamps, then SUS should unlock. Delete your test row(s) from `intake` and matching rows in `interview`/`category_validation`/`hands_on_task`/`sus` before the first real participant, so IDs start clean at SME-1.
+- Confirm the consent checkbox. After intake, `consent` should contain only the anonymous participant ID, acceptance, form version, and timestamp. Complete the embedded hands-on task once. `hands_on_task` should receive only its fixed sample id and four timestamps, then SUS should unlock. Delete your test row(s) from `intake` and matching rows in `consent`/`interview`/`category_validation`/`hands_on_task`/`sus` before the first real participant, so IDs start clean at SME-1.
 
 ## How responses are organized
 
-Six tables (Table Editor in the Supabase dashboard gives a spreadsheet-like grid per table, with CSV export), one row per participant per table (except `category_validation`, which gets one row per finding — 6 rows per participant):
+Seven tables (Table Editor in the Supabase dashboard gives a spreadsheet-like grid per table, with CSV export), one row per participant per table (except `category_validation`, which gets one row per finding — 6 rows per participant):
 
 - **intake** — participant code (e.g. `SME-1`), timestamp, years of experience, platforms/languages, current role. (Name is never sent to the database — it's only used on-screen to confirm identity.)
+- **consent** — participant ID, explicit acceptance, consent form version, and first consent timestamp. No name or study response is stored here.
 - **interview** — participant ID, timestamp, and free-text notes for Q2–Q6.
 - **category_validation** — one row per finding (6 per participant): participant ID, finding number, line, finding title, the participant's blind guess, the AI-assigned category, their agreement answer, correct category if they disagreed, and any "could also be" ranking.
 - **hands_on_task** — the fixed sample ID plus first timestamps for prototype opened, review completed, feedback opened, and suggested fix applied. It never stores code, Firebase IDs, email, or Glance history.
@@ -85,7 +87,7 @@ Join on participant ID across tables (via the Table Editor's relationships, or a
 
 The database is locked down with Row Level Security: the public `anon`
 key (the one in `config.js`) has zero direct read/write access to any
-table, and can only call the 6 specific functions in
+table, and can only call the 7 specific functions in
 `supabase/migration.sql`, each of which does exactly what the old Apps
 Script backend did — no more. That said, anyone with the anon key can
 still call those functions directly (e.g. with `curl`), the same as

@@ -1497,6 +1497,24 @@ footer {
   outline: 0;
 }
 
+.consent-card { max-width: 760px; }
+.consent-summary {
+  margin: 24px 0;
+  border-top: 1px solid #0b0c0c;
+  border-bottom: 1px solid #0b0c0c;
+}
+.consent-summary h3 { margin: 18px 0 6px; font-size: 1.05rem; }
+.consent-summary p { margin: 0 0 18px; }
+.consent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 20px 0 8px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.consent-check input { flex: 0 0 auto; margin-top: 4px; }
+
 @media (max-width: 760px) {
   .prototype-progress { grid-template-columns: 1fr 1fr; }
   .prototype-progress li:nth-child(2) { border-right: 0; }

@@ -56,6 +56,8 @@ const FINDINGS = {
 
 var submitGuessCallCount = {}; // findingNum -> count, so the resume test can prove no duplicate POST
 var assignIdCallCount = 0; // proves the Back-to-Intake guard doesn't mint a second participant ID
+var saveConsentCallCount = 0;
+var lastConsentPayload = null;
 var handsOnMilestoneCallCount = {}; // milestone -> count; the task RPC must be idempotent client-side too
 
 const browser = await chromium.launch();
@@ -81,6 +83,11 @@ await page.route('**/rest/v1/rpc/*', async (route) => {
       // app.js guard against re-submitting Intake is actually exercised,
       // not just assumed.
       resp = { ok: true, id: 'SME-' + assignIdCallCount };
+      break;
+    case 'save_consent':
+      saveConsentCallCount++;
+      lastConsentPayload = body;
+      resp = { ok: true };
       break;
     case 'save_interview':
       resp = { ok: true };
@@ -133,6 +140,15 @@ assert(await page.locator('#resume-banner:not(.hidden)').count() === 0, 'resume 
 assert((await page.textContent('#section-cover')).includes('Dart and Kotlin'), 'cover clearly names the study focus');
 await shot('real-0-cover.png');
 await page.click('#btn-cover-start');
+await page.waitForSelector('#section-consent.active');
+assert(await page.locator('#stepper.hidden').count() === 1, 'stepper remains hidden while consent is considered');
+await shot('real-0b-consent.png');
+await page.click('#btn-consent-continue');
+assert(await page.locator('#consent-error:not(.hidden)').count() === 1, 'blocks continuing without explicit consent');
+await page.click('#btn-consent-decline');
+assert(await page.locator('#consent-declined:not(.hidden)').count() === 1, 'declining consent records no response and explains the next choice');
+await page.check('#consent-agree');
+await page.click('#btn-consent-continue');
 await page.waitForSelector('#section-intake.active');
 await shot('real-1-intake.png');
 
@@ -144,6 +160,9 @@ await page.waitForTimeout(200);
 assert(await page.locator('#section-cover.active').count() === 1, 'reload before assignId returns to the cover (no premature persistence)');
 assert(await page.locator('#resume-banner:not(.hidden)').count() === 0, 'resume banner still hidden — unsubmitted intake fields are not a resumable session');
 await page.click('#btn-cover-start');
+await page.waitForSelector('#section-consent.active');
+await page.check('#consent-agree');
+await page.click('#btn-consent-continue');
 await page.waitForSelector('#section-intake.active');
 assert((await page.inputValue('#in-role')) === '', 'unsubmitted intake field is not restored (was never persisted)');
 
@@ -161,6 +180,8 @@ await page.click('#btn-intake-submit');
 await page.waitForSelector('#section-demo.active');
 await page.waitForTimeout(350);
 assert((await page.textContent('#id-badge-demo')).trim() === 'SME-1', 'assigned ID SME-1 shown after intake, on the Demo section');
+assert(saveConsentCallCount === 1, 'explicit consent is recorded exactly once after the anonymous participant ID is assigned');
+assert(lastConsentPayload.p_id === 'SME-1' && lastConsentPayload.p_accepted === true && lastConsentPayload.p_consent_version === 'sme-web-consent-v1', 'consent RPC stores only the participant ID, true acceptance, and the form version');
 await shot('real-2-demo.png');
 
 // --- 2b. Back-button chain: Demo -> Intake -> (Continue again) -> Demo,

@@ -8,13 +8,14 @@ This file is a handoff brief for a Claude Code session picking up this project c
 
 A single-page web app that runs an SME (subject-matter expert) interview for a master's thesis: *"Development of a Mobile-Native AI-Powered Code Review Application Using Serverless Architecture"* (Muhammad Syaheer Daniel, MMSD, UTeM FTMK). The participant (or a researcher, typing on their behalf during a live session) goes through these stages in order:
 
-1. **Intake** — background/experience details, gets assigned a sequential anonymous ID (`SME-1`, `SME-2`, ...)
-2. **Video Demo** — a short walkthrough before discussion
-3. **Interview** — five open-ended discussion questions (Q2-Q6), free-text notes
-4. **Category Validation Exercise** — the centerpiece. Six real findings from a code-review AI tool are shown one at a time, code on the left and the question on the right (side-by-side above 600px, stacked below it). The participant must guess which of 4 categories (Code Quality / Bugs / Optimization / Readability) a finding belongs to **before** the AI's actual answer is revealed, then state agreement.
-5. **Hands-on Prototype** — a researcher-supervised, fixed `MySejahteraAlpha.dart` task in the embedded Glance web build: run a review, open feedback, apply one suggested fix.
-6. **SUS** — the standard 10-item System Usability Scale, locked until all four hands-on milestones are saved.
-7. **Done**
+1. **Consent** — participant reads the study information and explicitly agrees before an anonymous ID or any response is created. The accepted form version and first timestamp are recorded later against that ID.
+2. **Intake** — background/experience details, gets assigned a sequential anonymous ID (`SME-1`, `SME-2`, ...)
+3. **Video Demo** — a short walkthrough before discussion
+4. **Interview** — five open-ended discussion questions (Q2-Q6), free-text notes
+5. **Category Validation Exercise** — the centerpiece. Six real findings from a code-review AI tool are shown one at a time, code on the left and the question on the right (side-by-side above 600px, stacked below it). The participant must guess which of 4 categories (Code Quality / Bugs / Optimization / Readability) a finding belongs to **before** the AI's actual answer is revealed, then state agreement.
+6. **Hands-on Prototype** — a researcher-supervised, fixed `MySejahteraAlpha.dart` task in the embedded Glance web build: run a review, open feedback, apply one suggested fix.
+7. **SUS** — the standard 10-item System Usability Scale, locked until all four hands-on milestones are saved.
+8. **Done**
 
 All responses are written to a Supabase (Postgres) database via its auto-generated REST/RPC API.
 
@@ -29,12 +30,13 @@ The whole point of the Category Validation Exercise is measuring whether the par
 ## File map
 
 ```
-index.html            Page structure — Cover + Intake/Demo/Interview/CVE/Hands-on/SUS/Done sections, toggled via .active class
+index.html            Page structure — Cover + Consent + Intake/Demo/Interview/CVE/Hands-on/SUS/Done sections, toggled via .active class
 style.css              All styling. No CSS framework, no build step.
 app.js                 All client-side logic: state machine, validation, rendering, backend calls
 config.js              Two lines: SUPABASE_URL, SUPABASE_ANON_KEY. Currently placeholders — see "Deployment status".
 supabase/migration.sql The full backend schema, for a fresh Supabase project.
 supabase/003_add_hands_on_task.sql Incremental live-project migration for the Hands-on Prototype step.
+supabase/004_add_participant_consent.sql Incremental live-project migration for the recorded consent gate.
 README.md              End-user (non-technical) deploy instructions: create a Supabase project, run the migration, host the frontend.
 smoke_test.mjs         Playwright test that drives the REAL app.js against a stubbed backend. Run this after any change.
 preview_shots.mjs      Older/legacy script that fakes the UI by injecting DOM directly (bypasses app.js entirely).
@@ -70,7 +72,7 @@ The backend used to be a Google Apps Script Web App bound to a Google Sheet (`ga
 
 ### RLS + RPC design (why this isn't a plain CRUD API)
 
-Every table (`intake`, `interview`, `category_validation`, `hands_on_task`, `sus`, `findings`) has Row Level Security enabled with **zero** policies — default-deny for the `anon` role Supabase's public API uses. The only way in or out is 6 `SECURITY DEFINER` Postgres functions, each `REVOKE`d from `PUBLIC` and explicitly `GRANT`ed to `anon`: `assign_id`, `save_interview`, `submit_guess`, `submit_agreement`, `save_hands_on_milestone`, `save_sus`. Each pins `search_path = ''` and fully-qualifies every table reference (`public.*`) — this closes a real Postgres privilege-escalation footgun where an unpinned `search_path` on a `SECURITY DEFINER` function lets a caller shadow an unqualified name. **If you add a new RPC function, follow this exact pattern** (RLS-locked tables, `SECURITY DEFINER`, pinned `search_path`, explicit revoke-then-grant) — don't add a new table without RLS, and don't grant `anon` direct table access as a shortcut, or you reopen the exact hole this design closes. See `supabase/migration.sql` for the full commented implementation.
+Every table (`intake`, `consent`, `interview`, `category_validation`, `hands_on_task`, `sus`, `findings`) has Row Level Security enabled with **zero** policies — default-deny for the `anon` role Supabase's public API uses. The only way in or out is 7 `SECURITY DEFINER` Postgres functions, each `REVOKE`d from `PUBLIC` and explicitly `GRANT`ed to `anon`: `assign_id`, `save_consent`, `save_interview`, `submit_guess`, `submit_agreement`, `save_hands_on_milestone`, `save_sus`. Each pins `search_path = ''` and fully-qualifies every table reference (`public.*`) — this closes a real Postgres privilege-escalation footgun where an unpinned `search_path` on a `SECURITY DEFINER` function lets a caller shadow an unqualified name. A server-side trigger also rejects interview, CVE, hands-on, and SUS writes unless an accepted `consent` row exists. **If you add a new RPC function, follow this exact pattern** (RLS-locked tables, `SECURITY DEFINER`, pinned `search_path`, explicit revoke-then-grant) — don't add a new table without RLS, and don't grant `anon` direct table access as a shortcut, or you reopen the exact hole this design closes. See `supabase/migration.sql` for the full commented implementation.
 
 ### Backend contract (RPC functions)
 
@@ -79,6 +81,7 @@ All requests: `POST {SUPABASE_URL}/rest/v1/rpc/<function_name>`, headers `apikey
 | Action (app.js) | RPC function | Params | Response fields | Effect |
 |---|---|---|---|---|
 | `assignId` | `assign_id` | `p_years_experience`, `p_platforms`, `p_role` | `id` (e.g. `"SME-3"`) | Inserts a row into `intake`; `id` is a generated column off an identity PK — atomic/race-safe under concurrent submissions |
+| `saveConsent` | `save_consent` | `p_id`, `p_accepted`, `p_consent_version` | — | Upserts an explicit accepted consent record, preserving its first timestamp |
 | `saveInterview` | `save_interview` | `p_id`, `p_q2`..`p_q6` | — | Upserts a row into `interview` (one row per participant) |
 | `submitGuess` | `submit_guess` | `p_id`, `p_finding_num` (1-6), `p_guess` | `title`, `line`, `category`, `explanation` — **the reveal** | Upserts a row into `category_validation` (agreement columns blank) |
 | `submitAgreement` | `submit_agreement` | `p_id`, `p_finding_num`, `p_agreement`, `p_correct_category`, `p_could_also_be` | — | Finds the matching `category_validation` row (by `participant_id`+`finding_num`) and fills in the agreement columns; errors if no matching guess row exists yet |
@@ -87,9 +90,10 @@ All requests: `POST {SUPABASE_URL}/rest/v1/rpc/<function_name>`, headers `apikey
 
 `yearsExperience`, `platforms`, `agreement`, `correctCategory`, and `couldAlsoBe` are all sent as **plain strings**, even though the UI uses richer controls (slider, chips, toggle switch, ranked checkboxes) to produce them — same reasoning as before the migration: the RPC functions never need to change when the frontend's input widgets change. If you add a new field that needs its own column, add it to the relevant table in `supabase/migration.sql` **and** update the corresponding function's `insert`/`update` — both, in the same change, or you get silent data loss (the function will just not persist the new field). Unlike the old Sheet-based setup, adding a column to an existing table with data in it is a normal `alter table ... add column ...` in the SQL Editor — no "retrofit" caveat.
 
-### Schema (6 tables, `supabase/migration.sql`)
+### Schema (7 tables, `supabase/migration.sql`)
 
 - **intake** — `participant_code` (generated, e.g. `SME-3`), timestamp, years of experience, platforms/languages, role
+- **consent** — participant_id, accepted, consent_version, consented_at. It does not contain a name or study responses.
 - **interview** — participant_id, timestamp, Q2..Q6 (one row per participant)
 - **category_validation** — participant_id, finding_num, line, finding_title, guess (blind), ai_category (revealed), agreement, correct_category, could_also_be, guess_at, agreement_at — **one row per finding**, so 6 rows per participant, not 1
 - **hands_on_task** — participant_id, fixed sample_id, opened_at, review_completed_at, feedback_opened_at, fix_applied_at. It deliberately contains no code, Firebase identity/token, email, or Glance history.
@@ -106,11 +110,13 @@ Join on `participant_id` across tables (via the Table Editor's relationships, or
 
 **Hands-on Prototype implementation (13 August 2026):** the local code now adds the seventh survey step, strict same-origin iframe/nonce message checks, four idempotent ordered milestone writes, and reload recovery. The parent passes only `studyNonce` in `prototype/?studyNonce=...`; it never sends the SME participant ID or survey answers to Glance. The child posts `{type: 'glance-study:milestone', nonce, milestone}` only. The existing live project still needs `supabase/003_add_hands_on_task.sql` run, and the Glance Firebase project `glance-app-503806` still needs a Firebase Web app plus Anonymous Authentication and the `syaheerdnl.github.io` authorised domain before a real Gemini prototype can be built and published under `prototype/`. Do not publish the structural `FORCE_MOCK_SERVICE=true` build. The full procedure is documented in `glance/STUDY_WEB_DEPLOYMENT.md` in the Glance repository. After collection, remove the deployed prototype or disable Anonymous Authentication to limit uninvited Gemini usage.
 
+**Recorded consent implementation (13 August 2026):** local code adds a Consent page between Cover and Intake. The participant cannot progress without ticking the explicit agreement, and `save_consent` records only `participant_id`, `accepted=true`, `sme-web-consent-v1`, and the first consent timestamp. `supabase/004_add_participant_consent.sql` must be run before this UI is deployed. It also installs database triggers that reject all interview, CVE, hands-on, and SUS writes without recorded consent. The wording is a practical web form based on the current study scope, not a substitute for any faculty ethics-approved participant-information sheet; check it with the supervisor before live collection.
+
 **Known cleanup item:** a verification pass during setup created a real test row — `SME-1` in `intake` (role "Verification Test") plus one `category_validation` row for finding 1. Delete these from the Supabase Table Editor before the first real participant, so IDs start clean.
 
 **Resolved deployment check (13 August 2026):** the earlier 404 did not stem from a failed GitHub Pages build. GitHub's Actions tab shows every `pages-build-deployment` run through run #8 as successful; the latest build, deployment, and report jobs all completed successfully, and its published artifact is 55 MB. Repository Settings > Pages confirms the site deploys from `main` at `/ (root)`. Direct verification of `https://syaheerdnl.github.io/GlanceSMEResponses/glance-overview.mp4` returns **200 OK** as `video/mp4`, with byte-range support and a 58,278,041-byte content length. The live page now contains the six-step flow, including Demo, and its video element points to `glance-overview.mp4`. No Git LFS migration, re-encoding, or external host is required. The original 404 was most likely observed while the Pages/CDN rollout or cache had not yet caught up, rather than a persistent build failure. The only current Actions annotation is GitHub's non-blocking Node.js 20 deprecation warning for its internal Pages actions.
 
-**Three Supabase SQL files matter for the live project:** `supabase/migration.sql` (full schema, for a fresh install), `supabase/002_add_explanation.sql` (incremental — adds the `explanation` column + updates `submit_guess`), and `supabase/003_add_hands_on_task.sql` (incremental — creates the milestone-only hands-on record and RPC). Confirm the two incremental scripts have actually been executed in the SQL Editor before assuming their features work live.
+**Four Supabase SQL files matter for the live project:** `supabase/migration.sql` (full schema, for a fresh install), `supabase/002_add_explanation.sql` (incremental — adds the `explanation` column + updates `submit_guess`), `supabase/003_add_hands_on_task.sql` (incremental — creates the milestone-only hands-on record and RPC), and `supabase/004_add_participant_consent.sql` (incremental — creates recorded consent and the response-protection triggers). Confirm the three incremental scripts have actually been executed in the SQL Editor before assuming their features work live.
 
 **Prior deployment (superseded):** a Google Apps Script backend was previously deployed and live-tested; it proved unreliable (intermittent "unable to open the file" errors from Google, as low as ~20% success in repeated probing) and was replaced by the Supabase migration above. `gas/Code.gs` remains in the repo as reference but is not wired to anything.
 
@@ -122,7 +128,7 @@ Join on `participant_id` across tables (via the Table Editor's relationships, or
 1. Intercepts `config.js` to inject fake `SUPABASE_URL`/`SUPABASE_ANON_KEY` values
 2. Intercepts POST requests to `**/rest/v1/rpc/*` and returns realistic stubbed responses matching the real RPC contract above (dispatching on the function name in the URL path, not a `body.action` field — different from how the old Apps Script stub worked)
 3. Drives the actual `app.js` through the entire flow via real DOM interactions (clicks, fills) — not mocked/injected content
-4. Asserts on real behavior: ID assignment, validation blocking (empty guess, incomplete SUS), the reveal only showing after guess submission, the stepper updating, the code line highlighting matching the current finding, resume-in-progress across reloads (including the guess-submitted-but-not-yet-agreed case, verifying no duplicate `submit_guess` call), strict iframe source/origin/nonce validation, idempotent hands-on milestone saving, SUS locking until all four actions, and zero console/page errors
+4. Asserts on real behavior: consent blocking and its exact record payload, ID assignment, validation blocking (empty guess, incomplete SUS), the reveal only showing after guess submission, the stepper updating, the code line highlighting matching the current finding, resume-in-progress across reloads (including the guess-submitted-but-not-yet-agreed case, verifying no duplicate `submit_guess` call), strict iframe source/origin/nonce validation, idempotent hands-on milestone saving, SUS locking until all four actions, and zero console/page errors
 5. Screenshots each of the major states to `preview/real-*.png`
 
 Run it with:
