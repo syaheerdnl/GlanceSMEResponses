@@ -87,11 +87,16 @@ function assert(cond, msg) {
   console.log('OK: ' + msg);
 }
 
-// --- 1. Intake screen loads for real (not the setup-needed message) ---
+// --- 1. Study cover loads for real (not the setup-needed message) ---
 const bodyText = await page.textContent('body');
 assert(!bodyText.includes('Setup needed'), 'real app.js runs (no setup-needed placeholder)');
-assert(await page.locator('#section-intake.active').count() === 1, 'intake section active on load');
+assert(await page.locator('#section-cover.active').count() === 1, 'study cover active on load');
+assert(await page.locator('#stepper.hidden').count() === 1, 'study flow stepper is hidden on the cover');
 assert(await page.locator('#resume-banner:not(.hidden)').count() === 0, 'resume banner hidden with no saved session');
+assert((await page.textContent('#cover-title')).includes('Dart and Kotlin'), 'cover clearly names the study focus');
+await shot('real-0-cover.png');
+await page.click('#btn-cover-start');
+await page.waitForSelector('#section-intake.active');
 await shot('real-1-intake.png');
 
 // --- 1b. Resume boundary: typing into Intake (unsubmitted) and reloading must NOT
@@ -99,8 +104,10 @@ await shot('real-1-intake.png');
 await page.fill('#in-role', 'Some role typed but never submitted');
 await page.reload();
 await page.waitForTimeout(200);
-assert(await page.locator('#section-intake.active').count() === 1, 'reload before assignId stays on intake (no premature persistence)');
+assert(await page.locator('#section-cover.active').count() === 1, 'reload before assignId returns to the cover (no premature persistence)');
 assert(await page.locator('#resume-banner:not(.hidden)').count() === 0, 'resume banner still hidden — unsubmitted intake fields are not a resumable session');
+await page.click('#btn-cover-start');
+await page.waitForSelector('#section-intake.active');
 assert((await page.inputValue('#in-role')) === '', 'unsubmitted intake field is not restored (was never persisted)');
 
 // --- 2. Fill intake, submit, expect assigned ID + the Demo section ---
@@ -297,7 +304,7 @@ await shot('real-6-done.png');
 await page.reload();
 await page.waitForTimeout(200);
 assert(await page.locator('#resume-banner:not(.hidden)').count() === 0, 'no resume banner after a completed run (session was cleared)');
-assert(await page.locator('#section-intake.active').count() === 1, 'a completed run reloads fresh at Intake, not back at Done');
+assert(await page.locator('#section-cover.active').count() === 1, 'a completed run reloads fresh at the study cover, not back at Done');
 
 console.log('errors observed:', errors);
 assert(errors.length === 0, 'no console/page errors during the whole flow');

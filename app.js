@@ -232,7 +232,9 @@
   function showSection(id) {
     document.querySelectorAll('.section').forEach(function (s) { s.classList.remove('active'); });
     $(id).classList.add('active');
-    updateStepper(id.replace('section-', ''));
+    var isCover = id === 'section-cover';
+    $('stepper').classList.toggle('hidden', isCover);
+    if (!isCover) updateStepper(id.replace('section-', ''));
   }
 
   function updateStepper(activeStep) {
@@ -390,6 +392,14 @@
       '<p class="help">See README.md for the deploy steps: create a Supabase project, run supabase/migration.sql ' +
       'in its SQL Editor, then paste the project URL and anon public key into config.js.</p>' +
       '</div>';
+  }
+
+  // ---- Study cover ----
+
+  function initCover() {
+    $('btn-cover-start').addEventListener('click', function () {
+      showSection('section-intake');
+    });
   }
 
   // ---- Section 0: Intake ----
@@ -984,6 +994,7 @@
       return;
     }
 
+    initCover();
     initIntake();
     initDemo();
     initInterview();
@@ -1019,10 +1030,10 @@
         renderSUS();
         restoreSUSDraft();
       } else {
-        updateStepper('intake');
+        showSection('section-intake');
       }
     } else {
-      updateStepper('intake');
+      showSection('section-cover');
     }
   });
 })();
