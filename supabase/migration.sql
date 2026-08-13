@@ -11,7 +11,7 @@
 -- own blind guess. The `findings` table below is the ONLY place a category
 -- exists before a guess, and it is deliberately unreachable by the public
 -- `anon` role — Row Level Security is enabled on every table with zero
--- policies (default-deny), and the only way in or out is through the 5
+-- policies (default-deny), and the only way in or out is through the
 -- SECURITY DEFINER functions at the bottom, which run with elevated
 -- privilege and enforce write-then-reveal ordering exactly like the prior
 -- Google Apps Script backend (gas/Code.gs, kept in this repo for
@@ -114,6 +114,16 @@ create table public.findings (
                              -- returned by submit_guess after the guess is recorded
 );
 
+-- The allowlist itself is also locked down. It is consulted only by the
+-- authenticated researcher_dashboard RPC, never sent to the browser.
+create table public.researcher_access (
+  email       text primary key check (email = lower(email)),
+  created_at  timestamptz not null default now()
+);
+
+insert into public.researcher_access (email)
+values ('muhammadsyaheerdaniel@gmail.com');
+
 insert into public.findings (num, line, title, category, explanation) values
   (1, 5,  'Hardcoded Production API Key', 'Code Quality',
    'The production merchant key is embedded directly in the source as a string literal. Anyone with access to the repository, a build artifact, or a decompiled binary can extract it and impersonate this app to the payment gateway. Load it from a secure runtime config or environment variable instead, never commit it to source.'),
@@ -148,9 +158,10 @@ alter table public.category_validation  enable row level security;
 alter table public.sus                  enable row level security;
 alter table public.hands_on_task         enable row level security;
 alter table public.findings             enable row level security;
+alter table public.researcher_access    enable row level security;
 
 revoke all on public.intake, public.consent, public.interview, public.category_validation,
-                public.sus, public.hands_on_task, public.findings
+                public.sus, public.hands_on_task, public.findings, public.researcher_access
   from anon, authenticated;
 
 grant usage on schema public to anon, authenticated;
@@ -446,6 +457,80 @@ exception when foreign_key_violation then
 end; $$;
 revoke all on function public.save_hands_on_milestone(text, text, text) from public;
 grant execute on function public.save_hands_on_milestone(text, text, text) to anon;
+
+
+-- Researcher-only aggregate/raw-data endpoint. It has NO grant for anon.
+-- A valid Supabase Auth JWT is required, then its signed email claim must
+-- match the server-side allowlist. The public browser cannot read any table
+-- directly, and knowing researcher.html's URL is not enough to call this.
+create or replace function public.researcher_dashboard()
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare v_email text;
+begin
+  v_email := lower(coalesce(auth.jwt() ->> 'email', ''));
+  if v_email = '' or not exists (
+    select 1 from public.researcher_access where email = v_email
+  ) then
+    raise exception 'Researcher access required.' using errcode = '42501';
+  end if;
+
+  return jsonb_build_object(
+    'generatedAt', now(),
+    'participants', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'participantId', i.participant_code,
+        'studyPath', i.study_path,
+        'createdAt', i.created_at,
+        'yearsExperience', i.years_experience,
+        'platforms', i.platforms,
+        'role', i.role,
+        'consentedAt', c.consented_at,
+        'sus1', s.sus1, 'sus2', s.sus2, 'sus3', s.sus3, 'sus4', s.sus4, 'sus5', s.sus5,
+        'sus6', s.sus6, 'sus7', s.sus7, 'sus8', s.sus8, 'sus9', s.sus9, 'sus10', s.sus10,
+        'susScore', s.sus_score,
+        'sampleId', h.sample_id,
+        'openedAt', h.opened_at,
+        'reviewCompletedAt', h.review_completed_at,
+        'feedbackOpenedAt', h.feedback_opened_at,
+        'fixAppliedAt', h.fix_applied_at
+      ) order by i.id), '[]'::jsonb)
+      from public.intake i
+      left join public.consent c on c.participant_id = i.participant_code
+      left join public.sus s on s.participant_id = i.participant_code
+      left join public.hands_on_task h on h.participant_id = i.participant_code
+    ),
+    'categoryValidation', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'participantId', cv.participant_id,
+        'studyPath', i.study_path,
+        'findingNum', cv.finding_num,
+        'line', cv.line,
+        'findingTitle', cv.finding_title,
+        'guess', cv.guess,
+        'aiCategory', cv.ai_category,
+        'agreement', cv.agreement,
+        'correctCategory', cv.correct_category,
+        'couldAlsoBe', cv.could_also_be,
+        'guessAt', cv.guess_at,
+        'agreementAt', cv.agreement_at
+      ) order by cv.participant_id, cv.finding_num), '[]'::jsonb)
+      from public.category_validation cv
+      join public.intake i on i.participant_code = cv.participant_id
+    ),
+    'interviews', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'participantId', iv.participant_id,
+        'studyPath', i.study_path,
+        'createdAt', iv.created_at,
+        'q2', iv.q2, 'q3', iv.q3, 'q4', iv.q4, 'q5', iv.q5, 'q6', iv.q6
+      ) order by iv.participant_id), '[]'::jsonb)
+      from public.interview iv
+      join public.intake i on i.participant_code = iv.participant_id
+    )
+  );
+end; $$;
+revoke all on function public.researcher_dashboard() from public;
+grant execute on function public.researcher_dashboard() to authenticated;
 
 -- ============================================================
 -- Sanity checks to run after this migration (see README.md Part 1):

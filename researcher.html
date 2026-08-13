@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Researcher Results | Glance SME Study</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="researcher-page">
+
+<header>
+  <h1>Glance: SME interview study</h1>
+  <p>Faculty of Information and Communication Technology, UTeM</p>
+</header>
+
+<main>
+  <section class="section active researcher-shell" aria-labelledby="researcher-title">
+    <div id="researcher-login" class="card researcher-card">
+      <p class="pill">Private researcher area</p>
+      <h2 id="researcher-title">Study results</h2>
+      <p>This page provides the study dashboard and CSV exports. It is available only after an emailed sign-in link confirms the approved researcher account.</p>
+      <div id="researcher-login-status" class="status hidden" role="status"></div>
+      <div id="researcher-login-error" class="error hidden" role="alert"></div>
+      <button id="btn-researcher-login">Email me a sign-in link</button>
+      <p class="help">The link expires automatically. No participant can use this page to read study data.</p>
+      <p><a href="index.html">Return to the study</a></p>
+    </div>
+
+    <div id="researcher-dashboard" class="researcher-dashboard hidden">
+      <div class="researcher-toolbar">
+        <div>
+          <p class="pill">Private researcher area</p>
+          <h2>Study results</h2>
+          <p class="help" id="researcher-generated-at">Loading current records...</p>
+        </div>
+        <button type="button" class="secondary" id="btn-researcher-signout">Sign out</button>
+      </div>
+
+      <div class="researcher-filter-row">
+        <label for="researcher-route-filter">Participant group</label>
+        <select id="researcher-route-filter">
+          <option value="all">All participants</option>
+          <option value="full_sme">Full SME route</option>
+          <option value="sus_only">SUS-only route</option>
+        </select>
+      </div>
+
+      <div class="researcher-metrics" aria-live="polite">
+        <section class="researcher-metric">
+          <p>Completed SUS</p>
+          <strong id="metric-participants">0</strong>
+          <span id="metric-participants-detail">participants</span>
+        </section>
+        <section class="researcher-metric">
+          <p>Mean SUS score</p>
+          <strong id="metric-sus">Not available</strong>
+          <span>out of 100</span>
+        </section>
+        <section class="researcher-metric">
+          <p>Hands-on completion</p>
+          <strong id="metric-hands-on">0 / 0</strong>
+          <span>suggested fix applied</span>
+        </section>
+      </div>
+
+      <section class="researcher-panel" id="researcher-cve-panel">
+        <div class="researcher-panel-heading">
+          <div>
+            <h3>Category validation</h3>
+            <p class="help" id="researcher-cve-summary"></p>
+          </div>
+          <strong id="researcher-cve-overall">Not available</strong>
+        </div>
+        <div id="researcher-category-bars" class="researcher-category-bars"></div>
+        <p id="researcher-cve-unavailable" class="researcher-empty hidden">Category validation is collected only in the full SME route.</p>
+      </section>
+
+      <section class="researcher-panel">
+        <div class="researcher-panel-heading">
+          <div>
+            <h3>Export study data</h3>
+            <p class="help">Download the records for thesis analysis. Files contain only the selected participant group.</p>
+          </div>
+        </div>
+        <div class="researcher-export-row">
+          <button type="button" class="secondary" id="btn-export-participants">Participants CSV</button>
+          <button type="button" class="secondary" id="btn-export-sus">SUS CSV</button>
+          <button type="button" class="secondary" id="btn-export-hands-on">Hands-on CSV</button>
+          <button type="button" class="secondary" id="btn-export-category">Category CSV</button>
+          <button type="button" class="secondary" id="btn-export-interview">Interview CSV</button>
+        </div>
+      </section>
+
+      <section class="researcher-panel researcher-participant-panel">
+        <div class="researcher-panel-heading">
+          <div>
+            <h3>Participant overview</h3>
+            <p class="help">Anonymous IDs only. Free-text interview notes remain in the Interview CSV.</p>
+          </div>
+        </div>
+        <div class="researcher-table-wrap">
+          <table>
+            <thead><tr><th>Participant</th><th>Route</th><th>SUS</th><th>Hands-on fix</th><th>Consent</th></tr></thead>
+            <tbody id="researcher-participant-rows"></tbody>
+          </table>
+        </div>
+        <p id="researcher-no-participants" class="researcher-empty hidden">No completed records match this group yet.</p>
+      </section>
+    </div>
+  </section>
+</main>
+
+<footer>Private researcher dashboard &middot; participant records are never exposed through the public study flow.</footer>
+
+<script src="config.js"></script>
+<script src="researcher.js?v=20260813-researcher-results"></script>
+</body>
+</html>

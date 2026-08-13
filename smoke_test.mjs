@@ -54,18 +54,76 @@ const FINDINGS = {
   6: { line: 51, title: 'Imperative String Joining',              category: 'Readability',    explanation: 'The loop manually tracks the index to decide when to add a separator.' }
 };
 
+const RESEARCHER_DASHBOARD = {
+  generatedAt: '2026-08-13T12:00:00.000Z',
+  participants: [
+    {
+      participantId: 'SME-10', studyPath: 'full_sme', createdAt: '2026-08-13T09:00:00.000Z',
+      yearsExperience: '8 years', platforms: 'Android, Kotlin', role: 'Mobile Engineer', consentedAt: '2026-08-13T09:01:00.000Z',
+      sus1: 4, sus2: 2, sus3: 4, sus4: 2, sus5: 4, sus6: 2, sus7: 4, sus8: 2, sus9: 4, sus10: 2, susScore: 75,
+      sampleId: 'mysejahtera-alpha-dart-v1', openedAt: '2026-08-13T09:05:00.000Z', reviewCompletedAt: '2026-08-13T09:06:00.000Z', feedbackOpenedAt: '2026-08-13T09:07:00.000Z', fixAppliedAt: '2026-08-13T09:08:00.000Z'
+    },
+    {
+      participantId: 'SME-11', studyPath: 'sus_only', createdAt: '2026-08-13T10:00:00.000Z',
+      yearsExperience: null, platforms: null, role: null, consentedAt: '2026-08-13T10:01:00.000Z',
+      sus1: 5, sus2: 1, sus3: 5, sus4: 1, sus5: 5, sus6: 1, sus7: 5, sus8: 1, sus9: 5, sus10: 1, susScore: 100,
+      sampleId: 'mysejahtera-alpha-dart-v1', openedAt: '2026-08-13T10:05:00.000Z', reviewCompletedAt: '2026-08-13T10:06:00.000Z', feedbackOpenedAt: '2026-08-13T10:07:00.000Z', fixAppliedAt: '2026-08-13T10:08:00.000Z'
+    }
+  ],
+  categoryValidation: [
+    { participantId: 'SME-10', studyPath: 'full_sme', findingNum: 1, line: 5, findingTitle: 'Hardcoded Production API Key', guess: 'Code Quality', aiCategory: 'Code Quality', agreement: 'Yes', correctCategory: null, couldAlsoBe: null, guessAt: '2026-08-13T09:02:00.000Z', agreementAt: '2026-08-13T09:03:00.000Z' },
+    { participantId: 'SME-10', studyPath: 'full_sme', findingNum: 2, line: 28, findingTitle: 'Incorrect Refund Calculation Logic', guess: 'Code Quality', aiCategory: 'Bugs', agreement: 'No', correctCategory: 'Code Quality', couldAlsoBe: null, guessAt: '2026-08-13T09:03:00.000Z', agreementAt: '2026-08-13T09:04:00.000Z' }
+  ],
+  interviews: [
+    { participantId: 'SME-10', studyPath: 'full_sme', createdAt: '2026-08-13T09:01:30.000Z', q2: 'Example answer', q3: '', q4: '', q5: '', q6: '' }
+  ]
+};
+
 var submitGuessCallCount = {}; // findingNum -> count, so the resume test can prove no duplicate POST
 var assignIdCallCount = 0; // proves the Back-to-Intake guard doesn't mint a second participant ID
 var assignSusOnlyIdCallCount = 0;
 var saveConsentCallCount = 0;
 var lastConsentPayload = null;
 var handsOnMilestoneCallCount = {}; // milestone -> count; the task RPC must be idempotent client-side too
+var magicLinkCallCount = 0;
+var researcherDashboardCallCount = 0;
+var researcherSignoutCallCount = 0;
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 900, height: 1100 } });
 
 // Intercept the real config.js request and serve the fake project instead.
 await page.route('**/config.js', route => route.fulfill({ contentType: 'application/javascript', body: FAKE_CONFIG }));
+
+await page.route('**/auth/v1/*', async (route) => {
+  const req = route.request();
+  const pathName = new URL(req.url()).pathname;
+  if (pathName.endsWith('/otp')) {
+    const body = JSON.parse(req.postData());
+    magicLinkCallCount++;
+    assert(body.email === 'muhammadsyaheerdaniel@gmail.com', 'researcher magic link is sent only to the approved email');
+    assert(body.create_user === true, 'first magic-link sign-in can create the approved Auth account');
+    assert(body.redirect_to === fileUrl + 'researcher.html', 'researcher magic link returns to the private dashboard page');
+    await route.fulfill({ contentType: 'application/json', body: '{}' });
+    return;
+  }
+  if (pathName.endsWith('/user')) {
+    const authorized = req.headers().authorization === 'Bearer researcher-access-token';
+    await route.fulfill({
+      status: authorized ? 200 : 401,
+      contentType: 'application/json',
+      body: JSON.stringify(authorized ? { email: 'muhammadsyaheerdaniel@gmail.com' } : { message: 'Invalid JWT' })
+    });
+    return;
+  }
+  if (pathName.endsWith('/logout')) {
+    researcherSignoutCallCount++;
+    assert(req.headers().authorization === 'Bearer researcher-access-token', 'researcher sign-out revokes the authenticated server session');
+    await route.fulfill({ contentType: 'application/json', body: '{}' });
+    return;
+  }
+  await route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
+});
 
 // Stub the Supabase backend itself: intercept every RPC call
 // (POST {SUPABASE_URL}/rest/v1/rpc/<function_name>) and dispatch on the
@@ -115,6 +173,14 @@ await page.route('**/rest/v1/rpc/*', async (route) => {
       assert(body.p_sample_id === 'mysejahtera-alpha-dart-v1', 'hands-on RPC sends only the fixed sample id');
       handsOnMilestoneCallCount[body.p_milestone] = (handsOnMilestoneCallCount[body.p_milestone] || 0) + 1;
       resp = { ok: true };
+      break;
+    case 'researcher_dashboard':
+      researcherDashboardCallCount++;
+      if (req.headers().authorization !== 'Bearer researcher-access-token') {
+        await route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ message: 'Researcher access required.' }) });
+        return;
+      }
+      resp = RESEARCHER_DASHBOARD;
       break;
     default:
       resp = { ok: false, error: 'unhandled RPC function in stub: ' + fnName };
@@ -484,6 +550,35 @@ assert(await page.locator('#btn-prototype-continue:not(:disabled)').count() === 
 await page.click('#btn-prototype-continue');
 await page.waitForSelector('#section-sus.active');
 assert((await page.locator('#sus-items > .sus-item').count()) === 10, 'SUS-only route reaches the same 10-item SUS instrument');
+
+// --- 9. Researcher dashboard: public URL alone exposes no records. It first
+// requests a magic link only for the approved email, then the server-side RPC
+// receives the signed session token. The dashboard itself has no browser PIN.
+await page.goto(fileUrl + 'researcher.html');
+await page.waitForSelector('#researcher-login:not(.hidden)');
+assert(await page.locator('#researcher-dashboard.hidden').count() === 1, 'researcher dashboard is hidden before email authentication');
+await page.click('#btn-researcher-login');
+await page.waitForSelector('#researcher-login-status:not(.hidden)');
+assert(magicLinkCallCount === 1, 'researcher login sends exactly one email magic-link request');
+assert(await page.locator('#researcher-login-status:not(.hidden)').count() === 1, 'researcher login confirms that the email link was sent');
+
+await page.goto(fileUrl + 'researcher.html?magic-link=1#access_token=researcher-access-token&token_type=bearer');
+await page.waitForSelector('#researcher-dashboard:not(.hidden)');
+assert(researcherDashboardCallCount === 1, 'researcher dashboard RPC runs only after the authenticated session is verified');
+assert((await page.textContent('#metric-participants')).trim() === '2', 'researcher dashboard calculates completed SUS participants from protected data');
+assert((await page.textContent('#metric-sus')).trim() === '87.5', 'researcher dashboard calculates the mean SUS score');
+assert((await page.textContent('#researcher-cve-overall')).includes('50%'), 'researcher dashboard calculates the blind category match rate');
+assert(await page.locator('#researcher-participant-rows tr').count() === 2, 'researcher dashboard shows anonymous participant overview rows');
+assert(!page.url().includes('researcher-access-token'), 'magic-link access token is removed from the URL after being handled');
+await shot('real-7-researcher-dashboard.png');
+await page.selectOption('#researcher-route-filter', 'sus_only');
+assert((await page.textContent('#metric-participants')).trim() === '1', 'researcher filter separates SUS-only participants');
+assert(await page.locator('#researcher-cve-unavailable:not(.hidden)').count() === 1, 'researcher dashboard explains why SUS-only records have no category-validation result');
+await page.selectOption('#researcher-route-filter', 'full_sme');
+assert(await page.locator('#researcher-participant-rows tr').count() === 1, 'researcher filter separates full-SME participants');
+await page.click('#btn-researcher-signout');
+await page.waitForSelector('#researcher-login:not(.hidden)');
+assert(researcherSignoutCallCount === 1, 'researcher sign-out clears the local token and revokes the server session');
 
 console.log('errors observed:', errors);
 assert(errors.length === 0, 'no console/page errors during the whole flow');
