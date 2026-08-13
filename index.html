@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SME Interview | Development of a Mobile-Native AI-Powered Code Review Application</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>SME Interview and Evaluation</h1>
+  <p>Development of a Mobile-Native AI-Powered Code Review Application Using Serverless Architecture</p>
+  <p>Muhammad Syaheer Daniel | M032510005 | MMSD 5314 / 5326, UTeM FTMK &nbsp;&middot;&nbsp; Supervisor: Dr. Nor Hafeizah</p>
+</header>
+
+<!-- Resume banner: app.js shows this only when a saved session is restored on load -->
+<div class="resume-banner hidden" id="resume-banner">
+  <span id="resume-banner-text"></span>
+  <button type="button" class="secondary" id="btn-start-over">Start over</button>
+</div>
+
+<!-- Progress stepper: app.js toggles .done / .current on these as sections change -->
+<nav class="stepper" id="stepper" aria-label="Progress">
+  <div class="step" data-step="intake"><span class="step-dot">1</span><span class="step-label">Background</span></div>
+  <div class="step" data-step="interview"><span class="step-dot">2</span><span class="step-label">Interview</span></div>
+  <div class="step" data-step="cve"><span class="step-dot">3</span><span class="step-label">Category Check</span></div>
+  <div class="step" data-step="sus"><span class="step-dot">4</span><span class="step-label">SUS</span></div>
+  <div class="step" data-step="done"><span class="step-dot">5</span><span class="step-label">Done</span></div>
+</nav>
+
+<main>
+
+  <!-- ============ SECTION 0: INTAKE ============ -->
+  <section id="section-intake" class="section active">
+    <div class="card">
+      <h2>Before we start</h2>
+      <p class="help">Your name is used only to confirm who is being interviewed and is never saved. Once you submit, you will be assigned an anonymous Participant ID (e.g. SME-1) that is used for every answer after this.</p>
+
+      <label for="in-name">Name</label>
+      <input type="text" id="in-name" autocomplete="off">
+
+      <label for="in-years">Years of professional experience in mobile development</label>
+      <div class="slider-row">
+        <input type="range" id="in-years-slider" min="0" max="20" step="1" value="5">
+        <div class="slider-readout" id="in-years-readout">5 years</div>
+      </div>
+      <label class="checkbox-inline">
+        <input type="checkbox" id="in-years-cap"> More than 20 years
+      </label>
+      <p class="help">Supervisor's floor for this round of interviews is 3&ndash;5 years.</p>
+
+      <label>Platforms and languages you have worked with most</label>
+      <div class="chip-row" id="platform-chips">
+        <label class="chip"><input type="checkbox" value="Android"> Android</label>
+        <label class="chip"><input type="checkbox" value="iOS"> iOS</label>
+        <label class="chip"><input type="checkbox" value="Kotlin"> Kotlin</label>
+        <label class="chip"><input type="checkbox" value="Dart"> Dart</label>
+        <label class="chip"><input type="checkbox" value="Flutter"> Flutter</label>
+        <label class="chip"><input type="checkbox" value="Swift"> Swift</label>
+        <label class="chip"><input type="checkbox" value="Java"> Java</label>
+        <label class="chip"><input type="checkbox" value="React Native"> React Native</label>
+        <label class="chip"><input type="checkbox" value="Xamarin"> Xamarin</label>
+      </div>
+      <input type="text" id="in-platforms-other" placeholder="Other platforms/languages (optional)">
+
+      <label for="in-role">Current role</label>
+      <input type="text" id="in-role" placeholder="Start typing, or type your own" list="role-suggestions" autocomplete="off">
+      <datalist id="role-suggestions">
+        <option value="Mobile Software Engineer">
+        <option value="Senior Mobile Engineer">
+        <option value="Android Developer">
+        <option value="iOS Developer">
+        <option value="Flutter Developer">
+        <option value="Full-Stack Developer">
+        <option value="Software Engineering Lead">
+        <option value="Freelance Mobile Developer">
+      </datalist>
+
+      <div id="intake-error" class="error hidden"></div>
+      <button id="btn-intake-submit">Continue</button>
+    </div>
+  </section>
+
+  <!-- ============ SECTION 1: INTERVIEW Q2-Q6 ============ -->
+  <section id="section-interview" class="section">
+    <div class="card">
+      <p class="pill" id="id-badge-1"></p>
+      <h2>Section 2 &amp; 3: Quality and Category Accuracy of AI-Generated Feedback</h2>
+      <p class="help">These are open discussion questions. Type notes on the participant's answer as they talk; sub-probes are optional follow-ups at your discretion.</p>
+
+      <label>Q2. Have you previously used any AI-assisted code review or code feedback tools in your development workflow?</label>
+      <p class="help">If yes, which tools, and what was your experience? Did any support Dart or Kotlin specifically?</p>
+      <textarea id="q2" class="autogrow"></textarea>
+
+      <label>Q3. Based on what you observed during the demonstration, how would you rate the quality of the AI-generated code review feedback for Dart and Kotlin code?</label>
+      <p class="help">Specific/actionable vs. general? Any inaccurate or missed issues? Language-specific differences?</p>
+      <textarea id="q3" class="autogrow"></textarea>
+
+      <label>Q4. From your experience as a mobile developer, what types of code issues do you consider most important for an AI code review tool to detect and flag?</label>
+      <p class="help">Did the demonstration cover those types? Anything missing or underrepresented?</p>
+      <textarea id="q4" class="autogrow"></textarea>
+
+      <label>Q5. [TAM &mdash; PU] Would using this application enable developers to accomplish code review tasks more quickly than manual review?</label>
+      <p class="help">Would it enhance a developer's effectiveness catching issues in Dart and Kotlin projects?</p>
+      <textarea id="q5" class="autogrow"></textarea>
+
+      <label>Q6. [TAM &mdash; PEU] Was it easy to learn how to use the application, or did certain steps require more effort than expected?</label>
+      <p class="help">Was the interaction clear and understandable throughout the session?</p>
+      <textarea id="q6" class="autogrow"></textarea>
+
+      <div class="status hidden" id="interview-draft-status">Draft saved</div>
+      <div id="interview-error" class="error hidden"></div>
+      <button id="btn-interview-submit">Continue to Category Validation Exercise</button>
+    </div>
+  </section>
+
+  <!-- ============ SECTION 2: CATEGORY VALIDATION EXERCISE ============ -->
+  <section id="section-cve" class="section">
+    <div class="card">
+      <p class="pill" id="id-badge-2"></p>
+      <h2>Category Validation Exercise</h2>
+      <p class="help">These findings were generated ahead of time by running the application on <strong>JomPAYAlpha.dart</strong>, a real demo-snippet file carrying six planted issues spanning all four feedback categories. For each finding below, look at the flagged line in the code, then give your own category guess <strong>before</strong> the application's answer is revealed.</p>
+
+      <p><strong>Category reference card</strong></p>
+      <ul>
+        <li><strong>Code Quality:</strong> correctness and structure, where the behaviour or structure itself is wrong.</li>
+        <li><strong>Bugs:</strong> defects that could cause incorrect behaviour (logic error, null-reference risk, unhandled exception).</li>
+        <li><strong>Optimization:</strong> efficiency &mdash; redundant code, unnecessary allocation, avoidable computational complexity.</li>
+        <li><strong>Readability:</strong> how easily a human reader can follow the code.</li>
+      </ul>
+
+      <!--
+        The source panel and finding card below are restyled after the real
+        Glance app's own code-issues screen (glance/lib/widgets/code_panel.dart
+        and feedback_row.dart) — same category colors, same flagged-line rail.
+        Scoped under .cve-glance so those tokens stay local to this section;
+        the rest of the page keeps the serif/navy/teal identity above.
+      -->
+      <div class="cve-glance">
+        <div class="glance-panel" id="source-panel">
+          <div class="glance-panel-head">
+            <span>Source</span>
+            <span class="glance-muted">JomPAYAlpha.dart</span>
+          </div>
+          <div class="glance-legend">
+            <span class="legend-item"><span class="legend-dot" style="background:#BF4F4B"></span>Code Quality</span>
+            <span class="legend-item"><span class="legend-dot" style="background:#A8791E"></span>Bugs</span>
+            <span class="legend-item"><span class="legend-dot" style="background:#3C7F63"></span>Optimization</span>
+            <span class="legend-item"><span class="legend-dot" style="background:#6E63A6"></span>Readability</span>
+          </div>
+          <div class="glance-code" id="code-listing"></div>
+        </div>
+
+        <div class="progress" id="cve-progress"></div>
+        <div class="stepper-mini" id="cve-mini-progress"></div>
+
+        <div id="cve-finding-card" class="glance-panel finding-card">
+          <div class="finding-head">
+            <span class="finding-dot" id="finding-dot"></span>
+            <div class="finding-head-text">
+              <div class="finding-title" id="cve-finding-heading"></div>
+              <div class="finding-meta" id="cve-finding-meta"></div>
+            </div>
+          </div>
+          <p id="cve-finding-line" class="help"></p>
+
+          <label>Which category would you assign this finding to? (blind guess)</label>
+          <div class="radio-row" id="guess-options"></div>
+
+          <div id="guess-error" class="error hidden"></div>
+          <button id="btn-submit-guess">Submit guess</button>
+
+          <div class="reveal-box hidden" id="reveal-box">
+            <p id="reveal-text"></p>
+
+            <label>Agreement</label>
+            <div class="toggle-switch" id="agreement-mode">
+              <button type="button" class="toggle-option selected" data-mode="yesno">Quick (Yes/No)</button>
+              <button type="button" class="toggle-option" data-mode="likert">Detailed (1&ndash;5 scale)</button>
+            </div>
+            <div class="radio-row" id="agreement-yesno"></div>
+            <div class="likert-row hidden" id="agreement-likert"></div>
+
+            <div id="disagree-block" class="hidden">
+              <label>If you disagree, what is the correct category?</label>
+              <div class="radio-row" id="correct-category-options"></div>
+            </div>
+
+            <label>Could this also be another category?</label>
+            <p class="help">Tick any that could also apply, then mark which is the strongest secondary fit.</p>
+            <div class="rank-options" id="could-also-be-options"></div>
+
+            <div id="agreement-error" class="error hidden"></div>
+            <button id="btn-next-finding">Save and continue</button>
+          </div>
+        </div>
+
+        <div id="cve-done" class="hidden">
+          <p><strong>All six findings complete.</strong></p>
+          <button id="btn-to-sus">Continue to SUS</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SECTION 3: SUS ============ -->
+  <section id="section-sus" class="section">
+    <div class="card">
+      <p class="pill" id="id-badge-3"></p>
+      <h2>System Usability Scale (SUS)</h2>
+      <p class="help">Rate each statement from 1 (Strongly Disagree) to 5 (Strongly Agree), based on your experience using the application during the session.</p>
+      <div id="sus-items"></div>
+      <div class="status hidden" id="sus-draft-status">Draft saved</div>
+      <div id="sus-error" class="error hidden"></div>
+      <button id="btn-sus-submit">Finish</button>
+    </div>
+  </section>
+
+  <!-- ============ SECTION 4: DONE ============ -->
+  <section id="section-done" class="section">
+    <div class="card">
+      <h2>Thank you</h2>
+      <p>Responses for <strong id="done-id"></strong> have been recorded.</p>
+      <p id="done-sus-score"></p>
+    </div>
+  </section>
+
+</main>
+
+<footer>SME evaluation instrument &middot; responses are written to a private Google Sheet, not shown to other participants.</footer>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

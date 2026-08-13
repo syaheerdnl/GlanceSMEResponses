@@ -1,0 +1,631 @@
+:root {
+  --navy: #16324a;
+  --teal: #1b6fa8;
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --border: #d9dee3;
+  --text: #1c2733;
+  --muted: #5a6a78;
+  --accent: #1b6fa8;
+  --ok: #1e7b34;
+  --warn: #b45309;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Georgia", "Times New Roman", serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+header {
+  background: var(--navy);
+  color: #fff;
+  padding: 20px 24px;
+}
+
+header h1 {
+  margin: 0 0 4px 0;
+  font-size: 1.25rem;
+}
+
+header p {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+/* ---- Resume banner ---- */
+
+.resume-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  text-align: center;
+  background: #e9f2f8;
+  color: var(--navy);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  animation: fadeIn 0.25s ease;
+}
+
+.resume-banner button.secondary {
+  margin: 0;
+  padding: 5px 14px;
+  font-size: 0.82rem;
+}
+
+/* ---- Progress stepper ---- */
+
+.stepper {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  padding: 14px 12px;
+  flex-wrap: wrap;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.45;
+}
+
+.step:not(:last-child)::after {
+  content: "";
+  width: 20px;
+  height: 1px;
+  background: var(--border);
+  margin: 0 4px;
+  display: inline-block;
+}
+
+.step-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--border);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Arial, sans-serif;
+}
+
+.step-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-family: Arial, sans-serif;
+  white-space: nowrap;
+}
+
+.step.current { opacity: 1; }
+.step.current .step-dot { background: var(--teal); }
+.step.current .step-label { color: var(--navy); font-weight: bold; }
+
+.step.done { opacity: 1; }
+.step.done .step-dot { background: var(--ok); }
+.step.done .step-dot::before { content: "\2713"; }
+.step.done .step-label { color: var(--ok); }
+
+main {
+  max-width: 760px;
+  margin: 24px auto 80px auto;
+  padding: 0 16px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(22, 50, 74, 0.06);
+}
+
+.section { display: none; }
+.section.active { display: block; animation: fadeIn 0.25s ease; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+h2 {
+  margin-top: 0;
+  color: var(--navy);
+  font-size: 1.15rem;
+  border-bottom: 2px solid var(--teal);
+  padding-bottom: 6px;
+}
+
+label {
+  display: block;
+  font-weight: bold;
+  margin: 20px 0 6px 0;
+}
+
+label.inline {
+  display: inline-block;
+  font-weight: normal;
+  margin: 0 16px 0 0;
+}
+
+label.checkbox-inline {
+  font-weight: normal;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+label.checkbox-inline input { margin: 0; }
+
+input[type="text"],
+textarea,
+select {
+  width: 100%;
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--text);
+  transition: border-color 0.15s ease;
+}
+
+input[type="text"]:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(27, 111, 168, 0.12);
+}
+
+textarea { min-height: 60px; resize: vertical; overflow: hidden; }
+textarea.autogrow { resize: none; }
+
+.help {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ---- Years-of-experience slider ---- */
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+input[type="range"] {
+  flex: 1;
+  accent-color: var(--teal);
+  height: 4px;
+}
+
+.slider-readout {
+  min-width: 78px;
+  text-align: center;
+  font-weight: bold;
+  background: #e9f2f8;
+  color: var(--navy);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-family: Arial, sans-serif;
+}
+
+/* ---- Platform chips ---- */
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-weight: normal;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: #fafbfc;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  transition: all 0.15s ease;
+}
+
+.chip input { margin: 0; accent-color: var(--teal); }
+
+.chip.selected {
+  border-color: var(--teal);
+  background: var(--teal);
+  color: #fff;
+}
+
+#in-platforms-other { margin-top: 10px; }
+
+.radio-row, .likert-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.radio-option {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  background: #fafbfc;
+  transition: all 0.15s ease;
+}
+
+.radio-option input { margin-right: 6px; }
+
+.radio-option.selected {
+  border-color: var(--teal);
+  background: #e9f2f8;
+}
+
+/* ---- Agreement quick/detailed toggle ---- */
+
+.toggle-switch {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.toggle-option {
+  border: none;
+  background: #fff;
+  color: var(--muted);
+  padding: 7px 16px;
+  font-size: 0.85rem;
+  font-family: Arial, sans-serif;
+  cursor: pointer;
+  margin: 0;
+  border-radius: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.toggle-option.selected {
+  background: var(--teal);
+  color: #fff;
+}
+
+.toggle-option:hover:not(.selected) { background: #eef2f5; }
+
+/* ---- Could-also-be rank options ---- */
+
+.rank-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.rank-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+
+.rank-row label {
+  margin: 0;
+  font-weight: normal;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rank-row select {
+  width: 90px;
+  padding: 4px 6px;
+}
+
+.rank-row.active { border-color: var(--teal); background: #f4f9fc; }
+
+button {
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  background: var(--teal);
+  color: #fff;
+  cursor: pointer;
+  margin-top: 18px;
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+
+button:hover { background: var(--navy); }
+button:active { transform: translateY(1px); }
+
+button.secondary {
+  background: transparent;
+  color: var(--teal);
+  border: 1px solid var(--teal);
+}
+
+button:disabled {
+  background: #b7c2cb;
+  cursor: not-allowed;
+}
+
+.error {
+  color: #b91c1c;
+  font-size: 0.9rem;
+  margin-top: 10px;
+}
+
+.status {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-top: 10px;
+}
+
+.status-flash { animation: fadeIn 0.2s ease; }
+
+.pill {
+  display: inline-block;
+  background: var(--teal);
+  color: #fff;
+  border-radius: 999px;
+  padding: 2px 12px;
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.progress {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.stepper-mini {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.stepper-mini span {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--border);
+}
+
+.stepper-mini span.filled { background: var(--teal); }
+.stepper-mini span.current { background: var(--navy); }
+
+/* ---- Glance-style code panel + finding card (CVE section) ----
+   Ported from the real Glance app's source: theme/colors.dart (GlancePalette,
+   GlanceColors.category), theme/typography.dart, widgets/code_panel.dart and
+   widgets/feedback_row.dart. Deliberately scoped to .cve-glance — a quiet
+   neutral-panel look distinct from the rest of the page's serif/navy/teal
+   identity, since the point is to replicate that specific screen, not
+   reskin the whole instrument. System-font stand-ins are used in place of
+   Glance's real fonts (IBM Plex Sans / JetBrains Mono, loaded via Google
+   Fonts in the app) since this project doesn't load third-party fonts. */
+
+.cve-glance {
+  --gl-panel: #ffffff;
+  --gl-ink: #1b1f1d;
+  --gl-dim: #79817c;
+  --gl-faint: #afb5b1;
+  --gl-border: #e2e6e2;
+  --gl-shadow: 0 1px 2px rgba(15, 25, 20, 0.04), 0 6px 16px rgba(15, 25, 20, 0.06);
+  --gl-sans: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --gl-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+}
+
+.glance-panel {
+  background: var(--gl-panel);
+  border: 1px solid var(--gl-border);
+  border-radius: 14px;
+  box-shadow: var(--gl-shadow);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.glance-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gl-border);
+  font-family: var(--gl-sans);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--gl-dim);
+}
+
+.glance-muted {
+  color: var(--gl-dim);
+  text-transform: none;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.glance-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--gl-border);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--gl-sans);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--gl-dim);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.glance-code {
+  padding: 8px 0;
+  overflow-x: auto;
+  font-family: var(--gl-mono);
+  font-size: 11.5px;
+  line-height: 19px;
+}
+
+.code-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  min-width: max-content;
+  border-left: 3px solid transparent;
+  color: var(--gl-ink);
+  white-space: pre;
+}
+
+.code-line .ln {
+  color: var(--gl-faint);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.code-line .mark {
+  margin-left: auto;
+  padding-left: 8px;
+  font-size: 8px;
+}
+
+/* Current finding awaiting a guess: a neutral rail only — no hue, no dot.
+   Signals "this line matters" without saying which category, which is
+   the one place this can't be a straight port of Glance's own panel. */
+.code-line.current {
+  border-left-color: var(--gl-faint);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+/* Revealed (guess already recorded server-side): true category color. */
+.code-line.flagged {
+  border-left-color: var(--rail);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.finding-card { padding: 16px; }
+
+.finding-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-bottom: 8px;
+}
+
+.finding-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--gl-faint);
+  background: transparent;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.finding-head-text { flex: 1; min-width: 0; }
+
+.finding-title {
+  font-family: var(--gl-sans);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--gl-ink);
+}
+
+.finding-meta {
+  font-family: var(--gl-mono);
+  font-size: 10.5px;
+  color: var(--gl-dim);
+  margin-top: 3px;
+}
+
+.reveal-box {
+  border-top: 1px solid var(--gl-border);
+  margin: 16px -16px -16px;
+  padding: 16px;
+  animation: fadeIn 0.2s ease;
+}
+
+.hidden { display: none !important; }
+
+.note {
+  font-style: italic;
+  font-size: 0.85rem;
+  color: var(--muted);
+  border-left: 3px solid var(--border);
+  padding-left: 10px;
+  margin-top: 14px;
+}
+
+footer {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+  padding: 20px;
+}
+
+@media (max-width: 600px) {
+  .card { padding: 18px; }
+  .resume-banner { flex-direction: column; gap: 8px; }
+
+  /* Primary submit buttons go full-width for easier tapping; secondary
+     controls (Start over, the agreement quick/detailed toggle) stay their
+     natural size since they're paired with something else on the same row. */
+  button:not(.secondary):not(.toggle-option) { width: 100%; }
+
+  .stepper {
+    justify-content: flex-start;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 480px) {
+  .stepper { gap: 10px; padding: 10px 12px; }
+  .step:not(:last-child)::after { width: 8px; }
+  .step-label { display: none; }
+  .card { padding: 16px; }
+  .glance-legend { gap: 10px; }
+}
