@@ -93,7 +93,7 @@ assert(!bodyText.includes('Setup needed'), 'real app.js runs (no setup-needed pl
 assert(await page.locator('#section-cover.active').count() === 1, 'study cover active on load');
 assert(await page.locator('#stepper.hidden').count() === 1, 'study flow stepper is hidden on the cover');
 assert(await page.locator('#resume-banner:not(.hidden)').count() === 0, 'resume banner hidden with no saved session');
-assert((await page.textContent('#cover-title')).includes('Dart and Kotlin'), 'cover clearly names the study focus');
+assert((await page.textContent('#section-cover')).includes('Dart and Kotlin'), 'cover clearly names the study focus');
 await shot('real-0-cover.png');
 await page.click('#btn-cover-start');
 await page.waitForSelector('#section-intake.active');
