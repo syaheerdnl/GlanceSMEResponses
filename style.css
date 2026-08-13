@@ -1129,6 +1129,13 @@ header p:last-of-type {
   opacity: 1;
 }
 
+header p.research-title {
+  max-width: 900px;
+  color: #d8d8d8;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
 .resume-banner {
   justify-content: flex-start;
   max-width: none;

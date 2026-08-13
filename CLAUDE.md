@@ -8,6 +8,8 @@ This file is a handoff brief for a Claude Code session picking up this project c
 
 A single-page web app that runs a study for a master's thesis: *"Development of a Mobile-Native AI-Powered Code Review Application Using Serverless Architecture"* (Muhammad Syaheer Daniel, MMSD, UTeM FTMK). The participant (or a researcher, typing on their behalf during a live session) starts with these common stages:
 
+**Research-title display (14 August 2026, local until deployed):** the public study header and browser-tab title now show the complete official thesis title, “Development of a Mobile-Native AI-Powered Code Review Application Using Serverless Architecture,” beneath the concise Glance study label.
+
 1. **Consent** — participant reads the study information and explicitly agrees before an ID or any response is created. The accepted form version and first timestamp are recorded later against that ID.
 2. **Study path selection** — browser code `0811` selects the invited full-SME route. Continuing without it selects the SUS-only route. This is researcher-supervised routing, not a login or security boundary.
 
