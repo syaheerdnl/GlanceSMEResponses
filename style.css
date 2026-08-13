@@ -554,7 +554,10 @@ button:disabled {
 /* Revealed (guess already recorded server-side): true category color. */
 .code-line.flagged {
   border-left-color: var(--rail);
-  background: rgba(0, 0, 0, 0.02);
+  /* Tints the whole line, not just the border — matches the real Glance
+     app's code_panel.dart, which tints a flagged line's full background
+     with its category color at ~12% opacity, not just a colored rail. */
+  background: color-mix(in srgb, var(--rail) 12%, transparent);
 }
 
 .finding-card { padding: 16px; }
