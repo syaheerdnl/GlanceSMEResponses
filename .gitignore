@@ -5,3 +5,5 @@ package-lock.json
 
 # smoke_test.mjs screenshot output — regenerate locally with `node smoke_test.mjs`.
 preview/
+
+.DS_Store

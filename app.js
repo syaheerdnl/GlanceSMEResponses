@@ -1,15 +1,18 @@
 // app.js
 // Frontend logic for the SME Interview + Category Validation Exercise + SUS
-// web page. Talks only to the Apps Script Web App URL set in config.js.
+// web page. Talks only to the Supabase project (URL + anon key) set in
+// config.js, via plain fetch() calls to its auto-generated RPC endpoints —
+// see supabase/migration.sql for the Postgres functions backing this.
 // The AI-assigned category for each finding is never present in this file
 // or anywhere else client-side — it only ever arrives in the response to
-// submitGuess, after a guess has already been recorded server-side.
+// submitGuess, after a guess has already been recorded server-side (inside
+// the submit_guess Postgres function, itself gated by Row Level Security).
 //
 // Every value sent to the backend keeps the same shape callBackend has
 // always used (plain strings for yearsExperience/platforms/agreement/
 // correctCategory/couldAlsoBe), even though several inputs now use
 // richer controls (sliders, chips, toggles, ranked checkboxes) — this
-// means the already-deployed Code.gs never needs to change.
+// means the RPC functions never need to change when frontend widgets do.
 
 (function () {
   'use strict';
@@ -144,7 +147,7 @@
     participantId: null,
     findingIndex: 0,
     currentGuess: null,
-    agreementMode: 'yesno',
+    correctCategory: null, // the "If you disagree, what is the correct category?" pick
     couldAlsoBeOrder: [], // array of category strings, in the order the user ranked them
     revealedFindings: {}  // findingNum -> category string, filled in only after that
                            // finding's guess has already been recorded server-side
@@ -319,34 +322,59 @@
   }
 
   // ---- Backend calls ----
-  // Content-Type text/plain deliberately avoids a CORS preflight request,
-  // which Apps Script Web Apps cannot answer. The body is still JSON;
-  // Code.gs parses e.postData.contents itself regardless of the declared
-  // content type.
+  // Supabase's PostgREST layer has real CORS support, so this is a plain
+  // application/json fetch — no text/plain workaround needed (that trick
+  // only existed because Apps Script Web Apps can't answer CORS preflight).
+  //
+  // Postgres function parameter names are snake_case (p_-prefixed); this
+  // map translates the camelCase payload keys every call site already uses
+  // into the RPC parameter names the Postgres functions expect, so nothing
+  // above this function needs to change. Response bodies from every RPC use
+  // the same top-level keys (ok/id/title/line/category/susScore) the old
+  // Code.gs returned.
+
+  var ACTION_MAP = {
+    assignId:        { fn: 'assign_id',        params: { yearsExperience: 'p_years_experience', platforms: 'p_platforms', role: 'p_role' } },
+    saveInterview:   { fn: 'save_interview',   params: { id: 'p_id', q2: 'p_q2', q3: 'p_q3', q4: 'p_q4', q5: 'p_q5', q6: 'p_q6' } },
+    submitGuess:     { fn: 'submit_guess',     params: { id: 'p_id', findingNum: 'p_finding_num', guess: 'p_guess' } },
+    submitAgreement: { fn: 'submit_agreement', params: { id: 'p_id', findingNum: 'p_finding_num', agreement: 'p_agreement', correctCategory: 'p_correct_category', couldAlsoBe: 'p_could_also_be' } },
+    saveSUS:         { fn: 'save_sus',         params: { id: 'p_id', scores: 'p_scores' } }
+  };
 
   function callBackend(action, payload) {
-    var body = Object.assign({ action: action }, payload || {});
-    return fetch(WEB_APP_URL, {
+    var cfg = ACTION_MAP[action];
+    if (!cfg) return Promise.reject(new Error('Unknown action: ' + action));
+
+    var body = {};
+    Object.keys(cfg.params).forEach(function (jsKey) {
+      body[cfg.params[jsKey]] = (payload || {})[jsKey];
+    });
+
+    return fetch(SUPABASE_URL + '/rest/v1/rpc/' + cfg.fn, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+      },
       body: JSON.stringify(body)
     })
       .then(function (resp) {
-        if (!resp.ok) throw new Error('Server returned HTTP ' + resp.status);
-        return resp.json();
-      })
-      .then(function (data) {
-        if (!data.ok) throw new Error(data.error || 'Unknown server error');
-        return data;
+        return resp.json().catch(function () { return null; }).then(function (data) {
+          if (!resp.ok) throw new Error((data && (data.message || data.error)) || ('Server returned HTTP ' + resp.status));
+          if (!data || data.ok === false) throw new Error((data && data.error) || 'Unknown server error');
+          return data;
+        });
       });
   }
 
   // ---- Setup check ----
 
   function backendConfigured() {
-    return typeof WEB_APP_URL === 'string' &&
-      WEB_APP_URL.indexOf('PASTE_YOUR') === -1 &&
-      WEB_APP_URL.indexOf('http') === 0;
+    return typeof SUPABASE_URL === 'string' && typeof SUPABASE_ANON_KEY === 'string' &&
+      SUPABASE_URL.indexOf('YOUR-PROJECT-REF') === -1 &&
+      SUPABASE_ANON_KEY.indexOf('YOUR-ANON-PUBLIC-KEY') === -1 &&
+      SUPABASE_URL.indexOf('http') === 0;
   }
 
   function showSetupNeeded() {
@@ -355,9 +383,9 @@
       '<div class="card">' +
       '<h2>Setup needed</h2>' +
       '<p>This page is not connected to a backend yet. <code>config.js</code> still has the placeholder ' +
-      'value for <code>WEB_APP_URL</code> instead of a real Apps Script Web App URL.</p>' +
-      '<p class="help">See README.md for the deploy steps: create the Sheet, paste in gas/Code.gs, deploy it ' +
-      'as a Web App, then paste the resulting /exec URL into config.js.</p>' +
+      'values for <code>SUPABASE_URL</code>/<code>SUPABASE_ANON_KEY</code> instead of a real Supabase project.</p>' +
+      '<p class="help">See README.md for the deploy steps: create a Supabase project, run supabase/migration.sql ' +
+      'in its SQL Editor, then paste the project URL and anon public key into config.js.</p>' +
       '</div>';
   }
 
@@ -515,16 +543,26 @@
 
       if (revealedCat) {
         var color = CATEGORY_COLORS[revealedCat];
-        return '<div class="code-line flagged" style="--rail:' + color + '">' +
+        return '<div class="code-line flagged" data-line="' + lineNum + '" style="--rail:' + color + '">' +
           '<span class="ln">' + numStr + '</span>' + srcHtml +
           '<span class="mark" style="color:' + color + '">●</span></div>';
       }
       if (lineNum === currentLineNum) {
-        return '<div class="code-line current"><span class="ln">' + numStr + '</span>' + srcHtml + '</div>';
+        return '<div class="code-line current" data-line="' + lineNum + '"><span class="ln">' + numStr + '</span>' + srcHtml + '</div>';
       }
-      return '<div class="code-line"><span class="ln">' + numStr + '</span>' + srcHtml + '</div>';
+      return '<div class="code-line" data-line="' + lineNum + '"><span class="ln">' + numStr + '</span>' + srcHtml + '</div>';
     }).join('');
     $('code-listing').innerHTML = html;
+  }
+
+  // Brings the current finding's line into view within the source panel's
+  // own scroll region (see .glance-code's max-height/overflow-y in
+  // style.css) instead of leaving the participant to hunt for it manually.
+  function scrollToCurrentLine(lineNum) {
+    var el = document.querySelector('#code-listing [data-line="' + lineNum + '"]');
+    if (el && el.scrollIntoView) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
   }
 
   function renderMiniProgress() {
@@ -541,11 +579,12 @@
   function renderFinding() {
     var finding = FINDINGS_PUBLIC[state.findingIndex];
     state.currentGuess = null;
-    state.agreementMode = 'yesno';
+    state.correctCategory = null;
     state.couldAlsoBeOrder = [];
 
     renderMiniProgress();
     renderCodeListing(finding.line);
+    scrollToCurrentLine(finding.line);
 
     $('cve-finding-card').classList.remove('hidden');
     $('cve-done').classList.add('hidden');
@@ -575,34 +614,49 @@
     $('reveal-box').classList.add('hidden');
   }
 
-  function setAgreementMode(mode) {
-    state.agreementMode = mode;
-    document.querySelectorAll('#agreement-mode .toggle-option').forEach(function (btn) {
-      btn.classList.toggle('selected', btn.dataset.mode === mode);
-    });
-    $('agreement-yesno').classList.toggle('hidden', mode !== 'yesno');
-    $('agreement-likert').classList.toggle('hidden', mode !== 'likert');
-  }
-
   function renderCorrectCategoryOptions() {
     var el = $('correct-category-options');
     el.innerHTML = '';
     CATEGORIES.forEach(function (cat) {
-      el.appendChild(makeRadioOption('correct-category', cat, cat));
+      el.appendChild(makeRadioOption('correct-category', cat, cat, function (v) {
+        state.correctCategory = v;
+        // Ticking a category as THE correct answer here makes it redundant
+        // as a "could also be" secondary option — re-render to drop it.
+        renderCouldAlsoBeOptions();
+      }));
     });
   }
 
+  function clearCorrectCategory() {
+    state.correctCategory = null;
+    var el = $('correct-category-options');
+    el.querySelectorAll('.radio-option').forEach(function (o) { o.classList.remove('selected'); });
+    el.querySelectorAll('input').forEach(function (i) { i.checked = false; });
+    renderCouldAlsoBeOptions();
+  }
+
   function renderCouldAlsoBeOptions() {
+    // The category just picked as "correct" can't also be a secondary
+    // "could also be" fit — drop it if it was ticked before this render.
+    if (state.correctCategory) {
+      state.couldAlsoBeOrder = state.couldAlsoBeOrder.filter(function (c) { return c !== state.correctCategory; });
+    }
+
     var el = $('could-also-be-options');
     el.innerHTML = '';
     CATEGORIES.forEach(function (cat) {
+      if (cat === state.correctCategory) return; // already the stated correct answer, not a secondary option
+
       var row = document.createElement('div');
       row.className = 'rank-row';
+      var checked = state.couldAlsoBeOrder.indexOf(cat) !== -1;
+      row.classList.toggle('active', checked);
 
       var label = document.createElement('label');
       var cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.value = cat;
+      cb.checked = checked;
       var badge = document.createElement('span');
       badge.className = 'pill rank-badge hidden';
 
@@ -623,6 +677,7 @@
       row.appendChild(badge);
       el.appendChild(row);
     });
+    renderRankBadges();
   }
 
   function renderRankBadges() {
@@ -647,10 +702,6 @@
   }
 
   function initCVE() {
-    document.querySelectorAll('#agreement-mode .toggle-option').forEach(function (btn) {
-      btn.addEventListener('click', function () { setAgreementMode(btn.dataset.mode); });
-    });
-
     $('btn-submit-guess').addEventListener('click', function () {
       clearError('guess-error');
       if (!state.currentGuess) {
@@ -682,9 +733,7 @@
     $('btn-next-finding').addEventListener('click', function () {
       clearError('agreement-error');
       var finding = FINDINGS_PUBLIC[state.findingIndex];
-      var agreement = state.agreementMode === 'yesno'
-        ? selectedValue($('agreement-yesno'))
-        : selectedValue($('agreement-likert'));
+      var agreement = selectedValue($('agreement-yesno'));
 
       if (!agreement) {
         showError('agreement-error', 'Record an agreement answer before continuing.');
@@ -748,6 +797,7 @@
     var finding = FINDINGS_PUBLIC[state.findingIndex];
     state.revealedFindings[finding.num] = data.category;
     renderCodeListing(finding.line);
+    scrollToCurrentLine(finding.line);
 
     var color = CATEGORY_COLORS[data.category];
     var dot = $('finding-dot');
@@ -762,18 +812,23 @@
     $('reveal-text').innerHTML =
       'Application assigned this to: <strong>' + escapeHtml(data.category) + '</strong>';
 
+    // "If you disagree, what is the correct category?" only makes sense
+    // once they've actually said they disagree — shown on "No", hidden
+    // (and cleared) on "Yes", rather than always visible.
     var yn = $('agreement-yesno');
     yn.innerHTML = '';
-    ['Yes', 'No'].forEach(function (v) { yn.appendChild(makeRadioOption('agree-yn', v, v)); });
-
-    var lk = $('agreement-likert');
-    lk.innerHTML = '';
-    ['1 - Strongly Disagree', '2', '3', '4', '5 - Strongly Agree'].forEach(function (v) {
-      lk.appendChild(makeRadioOption('agree-likert', v, v));
+    ['Yes', 'No'].forEach(function (v) {
+      yn.appendChild(makeRadioOption('agree-yn', v, v, function (picked) {
+        if (picked === 'No') {
+          $('disagree-block').classList.remove('hidden');
+        } else {
+          $('disagree-block').classList.add('hidden');
+          clearCorrectCategory();
+        }
+      }));
     });
+    $('disagree-block').classList.add('hidden');
 
-    setAgreementMode('yesno');
-    $('disagree-block').classList.remove('hidden');
     renderCorrectCategoryOptions();
     renderCouldAlsoBeOptions();
   }

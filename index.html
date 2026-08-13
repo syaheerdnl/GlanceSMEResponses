@@ -137,68 +137,75 @@
         Scoped under .cve-glance so those tokens stay local to this section;
         the rest of the page keeps the serif/navy/teal identity above.
       -->
+      <!--
+        Code on the left, question on the right — side by side on wider
+        screens, stacked below the existing 600px breakpoint (see
+        .cve-columns in style.css). The right column is sticky so the
+        question stays in view while scrolling a long source panel.
+      -->
       <div class="cve-glance">
-        <div class="glance-panel" id="source-panel">
-          <div class="glance-panel-head">
-            <span>Source</span>
-            <span class="glance-muted">JomPAYAlpha.dart</span>
-          </div>
-          <div class="glance-legend">
-            <span class="legend-item"><span class="legend-dot" style="background:#BF4F4B"></span>Code Quality</span>
-            <span class="legend-item"><span class="legend-dot" style="background:#A8791E"></span>Bugs</span>
-            <span class="legend-item"><span class="legend-dot" style="background:#3C7F63"></span>Optimization</span>
-            <span class="legend-item"><span class="legend-dot" style="background:#6E63A6"></span>Readability</span>
-          </div>
-          <div class="glance-code" id="code-listing"></div>
-        </div>
-
-        <div class="progress" id="cve-progress"></div>
-        <div class="stepper-mini" id="cve-mini-progress"></div>
-
-        <div id="cve-finding-card" class="glance-panel finding-card">
-          <div class="finding-head">
-            <span class="finding-dot" id="finding-dot"></span>
-            <div class="finding-head-text">
-              <div class="finding-title" id="cve-finding-heading"></div>
-              <div class="finding-meta" id="cve-finding-meta"></div>
+        <div class="cve-columns">
+          <div class="col-code">
+            <div class="glance-panel" id="source-panel">
+              <div class="glance-panel-head">
+                <span>Source</span>
+                <span class="glance-muted">JomPAYAlpha.dart</span>
+              </div>
+              <div class="glance-legend">
+                <span class="legend-item"><span class="legend-dot" style="background:#BF4F4B"></span>Code Quality</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#A8791E"></span>Bugs</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#3C7F63"></span>Optimization</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#6E63A6"></span>Readability</span>
+              </div>
+              <div class="glance-code" id="code-listing"></div>
             </div>
           </div>
-          <p id="cve-finding-line" class="help"></p>
 
-          <label>Which category would you assign this finding to? (blind guess)</label>
-          <div class="radio-row" id="guess-options"></div>
+          <div class="col-finding">
+            <div class="progress" id="cve-progress"></div>
+            <div class="stepper-mini" id="cve-mini-progress"></div>
 
-          <div id="guess-error" class="error hidden"></div>
-          <button id="btn-submit-guess">Submit guess</button>
+            <div id="cve-finding-card" class="glance-panel finding-card">
+              <div class="finding-head">
+                <span class="finding-dot" id="finding-dot"></span>
+                <div class="finding-head-text">
+                  <div class="finding-title" id="cve-finding-heading"></div>
+                  <div class="finding-meta" id="cve-finding-meta"></div>
+                </div>
+              </div>
+              <p id="cve-finding-line" class="help"></p>
 
-          <div class="reveal-box hidden" id="reveal-box">
-            <p id="reveal-text"></p>
+              <label>Which category would you assign this finding to? (blind guess)</label>
+              <div class="radio-row" id="guess-options"></div>
 
-            <label>Agreement</label>
-            <div class="toggle-switch" id="agreement-mode">
-              <button type="button" class="toggle-option selected" data-mode="yesno">Quick (Yes/No)</button>
-              <button type="button" class="toggle-option" data-mode="likert">Detailed (1&ndash;5 scale)</button>
+              <div id="guess-error" class="error hidden"></div>
+              <button id="btn-submit-guess">Submit guess</button>
+
+              <div class="reveal-box hidden" id="reveal-box">
+                <p id="reveal-text"></p>
+
+                <label>Agreement</label>
+                <div class="radio-row" id="agreement-yesno"></div>
+
+                <div id="disagree-block" class="hidden">
+                  <label>If you disagree, what is the correct category?</label>
+                  <div class="radio-row" id="correct-category-options"></div>
+                </div>
+
+                <label>Could this also be another category?</label>
+                <p class="help">Tick any that could also apply, then mark which is the strongest secondary fit.</p>
+                <div class="rank-options" id="could-also-be-options"></div>
+
+                <div id="agreement-error" class="error hidden"></div>
+                <button id="btn-next-finding">Save and continue</button>
+              </div>
             </div>
-            <div class="radio-row" id="agreement-yesno"></div>
-            <div class="likert-row hidden" id="agreement-likert"></div>
 
-            <div id="disagree-block" class="hidden">
-              <label>If you disagree, what is the correct category?</label>
-              <div class="radio-row" id="correct-category-options"></div>
+            <div id="cve-done" class="hidden">
+              <p><strong>All six findings complete.</strong></p>
+              <button id="btn-to-sus">Continue to SUS</button>
             </div>
-
-            <label>Could this also be another category?</label>
-            <p class="help">Tick any that could also apply, then mark which is the strongest secondary fit.</p>
-            <div class="rank-options" id="could-also-be-options"></div>
-
-            <div id="agreement-error" class="error hidden"></div>
-            <button id="btn-next-finding">Save and continue</button>
           </div>
-        </div>
-
-        <div id="cve-done" class="hidden">
-          <p><strong>All six findings complete.</strong></p>
-          <button id="btn-to-sus">Continue to SUS</button>
         </div>
       </div>
     </div>
@@ -228,7 +235,7 @@
 
 </main>
 
-<footer>SME evaluation instrument &middot; responses are written to a private Google Sheet, not shown to other participants.</footer>
+<footer>SME evaluation instrument &middot; responses are written to a private database, not shown to other participants.</footer>
 
 <script src="config.js"></script>
 <script src="app.js"></script>

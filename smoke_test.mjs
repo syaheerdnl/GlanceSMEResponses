@@ -5,14 +5,15 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fileUrl = 'file://' + path.join(__dirname, 'index.html');
 
-// A fake config.js loaded via addInitScript, so WEB_APP_URL looks configured
-// and app.js's real fetch-driven logic runs (not the placeholder screen).
-const FAKE_CONFIG = "const WEB_APP_URL = 'https://example.com/exec';";
+// A fake config.js loaded via addInitScript, so SUPABASE_URL/SUPABASE_ANON_KEY
+// look configured and app.js's real fetch-driven logic runs (not the
+// placeholder screen).
+const FAKE_CONFIG = "const SUPABASE_URL = 'https://fake-project.supabase.co'; const SUPABASE_ANON_KEY = 'fake-anon-key';";
 
-// Real Code.gs's FINDINGS (line/title/category) — mirrored here so the stub's
-// submitGuess response matches the real backend contract, including the line
-// number (a prior version of this stub hardcoded line: 0, which nothing
-// checked until the reveal UI started displaying it).
+// supabase/migration.sql's findings table (line/title/category) — mirrored
+// here so the stub's submit_guess response matches the real RPC contract,
+// including the line number (a prior version of this stub hardcoded line: 0,
+// which nothing checked until the reveal UI started displaying it).
 const FINDINGS = {
   1: { line: 5,  title: 'Hardcoded Production API Key',          category: 'Code Quality' },
   2: { line: 28, title: 'Incorrect Refund Calculation Logic',     category: 'Bugs' },
@@ -27,35 +28,39 @@ var submitGuessCallCount = {}; // findingNum -> count, so the resume test can pr
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 900, height: 1100 } });
 
-// Intercept the real config.js request and serve the fake URL instead.
+// Intercept the real config.js request and serve the fake project instead.
 await page.route('**/config.js', route => route.fulfill({ contentType: 'application/javascript', body: FAKE_CONFIG }));
 
-// Stub the Apps Script backend itself: intercept the fetch to the fake URL.
-await page.route('https://example.com/exec', async (route) => {
+// Stub the Supabase backend itself: intercept every RPC call
+// (POST {SUPABASE_URL}/rest/v1/rpc/<function_name>) and dispatch on the
+// function name in the URL path, matching how PostgREST actually routes
+// these — not on a body.action field like the old Apps Script stub did.
+await page.route('**/rest/v1/rpc/*', async (route) => {
   const req = route.request();
+  const fnName = new URL(req.url()).pathname.split('/').pop();
   const body = JSON.parse(req.postData());
   let resp;
-  switch (body.action) {
-    case 'assignId':
+  switch (fnName) {
+    case 'assign_id':
       resp = { ok: true, id: 'SME-1' };
       break;
-    case 'saveInterview':
+    case 'save_interview':
       resp = { ok: true };
       break;
-    case 'submitGuess': {
-      submitGuessCallCount[body.findingNum] = (submitGuessCallCount[body.findingNum] || 0) + 1;
-      const f = FINDINGS[body.findingNum];
+    case 'submit_guess': {
+      submitGuessCallCount[body.p_finding_num] = (submitGuessCallCount[body.p_finding_num] || 0) + 1;
+      const f = FINDINGS[body.p_finding_num];
       resp = { ok: true, title: f.title, category: f.category, line: f.line };
       break;
     }
-    case 'submitAgreement':
+    case 'submit_agreement':
       resp = { ok: true };
       break;
-    case 'saveSUS':
+    case 'save_sus':
       resp = { ok: true, susScore: 82.5 };
       break;
     default:
-      resp = { ok: false, error: 'unhandled action in stub: ' + body.action };
+      resp = { ok: false, error: 'unhandled RPC function in stub: ' + fnName };
   }
   await route.fulfill({ contentType: 'application/json', body: JSON.stringify(resp) });
 });
@@ -178,6 +183,17 @@ assert((await page.textContent('#reveal-text')).includes('Code Quality'), 'resum
 assert(await page.locator('#finding-dot.revealed').count() === 1, 'finding dot still shows revealed after resume');
 assert(await page.locator('#code-listing .code-line.flagged').count() === 1, 'code panel still shows the revealed line colored after resume');
 assert(submitGuessCallCount[1] === 1, 'resuming did NOT re-POST submitGuess for finding 1 (still exactly one call)');
+
+// --- 5c. Agreement UX: "correct category" only shows on "No", and whatever
+// is picked there is excluded from "could also be" (redundant otherwise). ---
+assert(await page.locator('#disagree-block:not(.hidden)').count() === 0, 'disagree-block hidden by default right after reveal');
+await page.click('#agreement-yesno .radio-option >> nth=1'); // "No"
+assert(await page.locator('#disagree-block:not(.hidden)').count() === 1, 'disagree-block shows after picking "No"');
+await page.click('#correct-category-options .radio-option:has-text("Bugs")');
+assert(await page.locator('#could-also-be-options input[value="Bugs"]').count() === 0, 'the chosen correct category is excluded from could-also-be options');
+await page.click('#agreement-yesno .radio-option >> nth=0'); // back to "Yes"
+assert(await page.locator('#disagree-block:not(.hidden)').count() === 0, 'disagree-block hides again after switching back to "Yes"');
+assert(await page.locator('#could-also-be-options input[value="Bugs"]').count() === 1, 'could-also-be options restore once correct-category is cleared');
 
 // --- 6. Walk through all 6 findings ---
 for (let i = 0; i < 6; i++) {

@@ -285,36 +285,6 @@ input[type="range"] {
   background: #e9f2f8;
 }
 
-/* ---- Agreement quick/detailed toggle ---- */
-
-.toggle-switch {
-  display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  overflow: hidden;
-  margin-top: 4px;
-}
-
-.toggle-option {
-  border: none;
-  background: #fff;
-  color: var(--muted);
-  padding: 7px 16px;
-  font-size: 0.85rem;
-  font-family: Arial, sans-serif;
-  cursor: pointer;
-  margin: 0;
-  border-radius: 0;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.toggle-option.selected {
-  background: var(--teal);
-  color: #fff;
-}
-
-.toggle-option:hover:not(.selected) { background: #eef2f5; }
-
 /* ---- Could-also-be rank options ---- */
 
 .rank-options {
@@ -443,6 +413,32 @@ button:disabled {
   --gl-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Consolas, monospace;
 }
 
+/* Code on the left, question on the right on wider screens; the question
+   column stays sticky so it's still visible while scrolling a long source
+   panel. Falls back to the original stacked layout below 600px. */
+.cve-columns {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.col-code {
+  flex: 1 1 55%;
+  min-width: 0;
+}
+
+.col-finding {
+  flex: 1 1 45%;
+  min-width: 0;
+  position: sticky;
+  top: 16px;
+}
+
+@media (max-width: 600px) {
+  .cve-columns { flex-direction: column; }
+  .col-finding { position: static; }
+}
+
 .glance-panel {
   background: var(--gl-panel);
   border: 1px solid var(--gl-border);
@@ -500,7 +496,9 @@ button:disabled {
 
 .glance-code {
   padding: 8px 0;
+  max-height: 480px;
   overflow-x: auto;
+  overflow-y: auto;
   font-family: var(--gl-mono);
   font-size: 11.5px;
   line-height: 19px;
@@ -531,10 +529,17 @@ button:disabled {
 
 /* Current finding awaiting a guess: a neutral rail only — no hue, no dot.
    Signals "this line matters" without saying which category, which is
-   the one place this can't be a straight port of Glance's own panel. */
+   the one place this can't be a straight port of Glance's own panel.
+   Bold/slightly larger text (not color) is the differentiator, so it
+   reads clearly at a glance against both plain code and .flagged lines. */
 .code-line.current {
   border-left-color: var(--gl-faint);
   background: rgba(0, 0, 0, 0.02);
+}
+
+.code-line.current .src {
+  font-weight: 700;
+  font-size: 12.5px;
 }
 
 /* Revealed (guess already recorded server-side): true category color. */

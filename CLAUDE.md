@@ -6,15 +6,15 @@ This file is a handoff brief for a Claude Code session picking up this project c
 
 ## What this project is
 
-A single-page web app that runs an SME (subject-matter expert) interview for a master's thesis: *"Development of a Mobile-Native AI-Powered Code Review Application Using Serverless Architecture"* (Muhammad Syaheer Daniel, MMSD, UTeM). The participant (or a researcher, typing on their behalf during a live session) goes through five stages in order:
+A single-page web app that runs an SME (subject-matter expert) interview for a master's thesis: *"Development of a Mobile-Native AI-Powered Code Review Application Using Serverless Architecture"* (Muhammad Syaheer Daniel, MMSD, UTeM FTMK). The participant (or a researcher, typing on their behalf during a live session) goes through five stages in order:
 
 1. **Intake** — background/experience details, gets assigned a sequential anonymous ID (`SME-1`, `SME-2`, ...)
 2. **Interview** — five open-ended discussion questions (Q2-Q6), free-text notes
-3. **Category Validation Exercise** — the centerpiece. Six real findings from a code-review AI tool are shown one at a time. The participant must guess which of 4 categories (Code Quality / Bugs / Optimization / Readability) a finding belongs to **before** the AI's actual answer is revealed, then state agreement.
+3. **Category Validation Exercise** — the centerpiece. Six real findings from a code-review AI tool are shown one at a time, code on the left and the question on the right (side-by-side above 600px, stacked below it). The participant must guess which of 4 categories (Code Quality / Bugs / Optimization / Readability) a finding belongs to **before** the AI's actual answer is revealed, then state agreement.
 4. **SUS** — the standard 10-item System Usability Scale
 5. **Done**
 
-All responses are written to a Google Sheet via a Google Apps Script Web App backend.
+All responses are written to a Supabase (Postgres) database via its auto-generated REST/RPC API.
 
 ## Why this exists instead of a Google Form or paper worksheet
 
@@ -27,82 +27,88 @@ The whole point of the Category Validation Exercise is measuring whether the par
 ## File map
 
 ```
-index.html    Page structure — 5 <section> elements, one per stage, toggled via .active class
-style.css     All styling. No CSS framework, no build step.
-app.js        All client-side logic: state machine, validation, rendering, backend calls
-config.js     Exactly one line: WEB_APP_URL. Currently a placeholder — see "Deployment status".
-gas/Code.gs   The backend. Deploy this in Google Apps Script, bound to a Google Sheet.
-README.md     End-user (non-technical) deploy instructions: create Sheet, deploy Code.gs, host the frontend.
-smoke_test.mjs      Playwright test that drives the REAL app.js against a stubbed backend. Run this after any change.
-preview_shots.mjs   Older/legacy script that fakes the UI by injecting DOM directly (bypasses app.js entirely).
-                     Superseded by smoke_test.mjs's screenshots. Keep for reference, don't treat its output as authoritative.
+index.html            Page structure — 5 <section> elements, one per stage, toggled via .active class
+style.css              All styling. No CSS framework, no build step.
+app.js                 All client-side logic: state machine, validation, rendering, backend calls
+config.js              Two lines: SUPABASE_URL, SUPABASE_ANON_KEY. Currently placeholders — see "Deployment status".
+supabase/migration.sql The backend. Run this once in a Supabase project's SQL Editor.
+README.md              End-user (non-technical) deploy instructions: create a Supabase project, run the migration, host the frontend.
+smoke_test.mjs         Playwright test that drives the REAL app.js against a stubbed backend. Run this after any change.
+preview_shots.mjs      Older/legacy script that fakes the UI by injecting DOM directly (bypasses app.js entirely).
+                        Superseded by smoke_test.mjs's screenshots. Keep for reference, don't treat its output as authoritative.
+gas/Code.gs            The PRIOR backend (Google Apps Script). No longer deployed or referenced by app.js — kept purely
+                        as historical/reference material for how the same contract was implemented before the Supabase
+                        migration. Do not resurrect this without a deliberate decision; app.js talks to Supabase now.
 ```
 
-There is no build step, no package.json, no framework. Everything is vanilla HTML/CSS/JS on purpose, so it can be dropped straight onto GitHub Pages (or any static host) with zero tooling. **Do not introduce a bundler, npm dependency, or framework unless the user explicitly asks for one** — that would break the "just push these 4 files to a repo" deploy story described in README.md.
+There is no build step, no package.json-driven bundler, no framework. Everything is vanilla HTML/CSS/JS on purpose, so it can be dropped straight onto GitHub Pages (or any static host) with zero tooling — including the Supabase calls, which go through plain `fetch()` against Supabase's REST/RPC endpoints, not the `@supabase/supabase-js` SDK (that would require either a bundler or a third-party `<script>` tag, both forbidden here). **Do not introduce a bundler, npm dependency, or framework unless the user explicitly asks for one** — that would break the "just push these 4 files to a repo" deploy story described in README.md. (`package.json` exists only to pin `playwright` as a dev/test dependency for `smoke_test.mjs` — it is not part of the deployed site.)
 
 ---
 
-## The blind-reveal boundary (read this before editing anything in app.js or Code.gs)
+## The blind-reveal boundary (read this before editing anything in app.js or supabase/migration.sql)
 
-`gas/Code.gs` has a `FINDINGS` object (line, title, category for all 6 planted issues). This is the **only** place the category exists before a guess is submitted.
+`supabase/migration.sql` creates a `findings` table (num, line, title, category for all 6 planted issues). This is the **only** place the category exists before a guess is submitted — and it's locked down with Row Level Security (zero policies, default-deny), so the public `anon` role cannot read it directly under any circumstance, only through the one function that's allowed to.
 
-`app.js` has a parallel `FINDINGS_PUBLIC` array — same findings, **same line numbers and titles, but no `category` field**. This is intentional duplication, not a bug: line/title are safe to ship to the client (the researcher already reads these aloud per the exercise's own script), the category is not.
+`app.js` has a parallel `FINDINGS_PUBLIC` array — same findings, **same line numbers and titles, but no `category` field**. This is intentional duplication, not a bug: line/title are safe to ship to the client (the researcher already reads these aloud per the exercise's own script; `renderFinding()` shows the title and line up front), the category is not.
 
-The flow: client POSTs `{action: 'submitGuess', id, findingNum, guess}` → server looks up the real category in `FINDINGS`, records the guess+category into the Sheet, and **only then** sends `{category, title}` back in the response. `revealFinding()` in app.js is the only place the category ever touches the DOM.
+The flow: client calls the `submit_guess` RPC (`POST {SUPABASE_URL}/rest/v1/rpc/submit_guess`) with `{p_id, p_finding_num, p_guess}` → the Postgres function (running `SECURITY DEFINER`, so it can read the locked-down `findings` table) looks up the real category, **inserts** the guess+category into `category_validation`, and **only then** returns `{title, line, category}` in its response — the write happens before the reveal, in the same transaction. `revealFinding()` in app.js is the only place the category ever touches the DOM, and `state.revealedFindings` (used to keep already-revealed findings colored in the source panel as the participant progresses) is only ever populated inside `revealFinding()`, never earlier.
 
-**If you ever change the findings** (different demo file, different planted issues, etc.), you must update both `FINDINGS` in `Code.gs` (with category) and `FINDINGS_PUBLIC` in `app.js` (without category) — and double check nothing in app.js accidentally imports or hardcodes a category value anywhere else.
+**If you ever change the findings** (different demo file, different planted issues, etc.), you must update both the `insert into findings` block in `supabase/migration.sql` (with category) and `FINDINGS_PUBLIC` in `app.js` (without category) — and re-run the changed `insert`/table setup in the Supabase SQL Editor, plus double check nothing in app.js accidentally imports or hardcodes a category value anywhere else.
 
----
-
-## The CORS workaround (don't "fix" this)
-
-`callBackend()` in app.js sends requests with `Content-Type: text/plain;charset=utf-8`, not `application/json`, even though the body IS JSON. This is deliberate: a `text/plain` POST body counts as a CORS "simple request" and skips the preflight `OPTIONS` request, which Apps Script Web Apps cannot answer (they only implement `doGet`/`doPost`). If you change this to `application/json`, cross-origin requests from GitHub Pages to the Apps Script `/exec` URL will start failing with CORS errors. `Code.gs`'s `doPost` parses `e.postData.contents` as JSON directly, ignoring the declared content type, so this asymmetry is intentional and matched on both ends.
+**Threat model note, not a gap introduced by any particular backend choice:** this boundary protects against a category being reachable through *normal use of the page*. It does not stop someone who deliberately crafts a raw request straight to `submit_guess` for a finding they haven't reached in the UI yet — the anon key genuinely has `EXECUTE` on that function, and the function's whole job is to return the category. This was equally true of the prior Apps Script `/exec` endpoint. Closing it would require a per-participant, server-issued single-use token — a larger design change, not something either backend does today.
 
 ---
 
-## Backend contract (Code.gs actions)
+## Backend: Supabase (Postgres + PostgREST), not Apps Script
 
-All requests: `POST` to `WEB_APP_URL`, body `{"action": "...", ...fields}`. All responses: `{"ok": true, ...}` or `{"ok": false, "error": "..."}`.
+The backend used to be a Google Apps Script Web App bound to a Google Sheet (`gas/Code.gs`, still in this repo for reference). It was migrated to Supabase after the Apps Script Web App proved unreliable in practice — live testing found it intermittently returning Google Drive's "unable to open the file" error (confirmed via repeated probing: as low as ~20% success rate at times), which turned out to be inherent to Apps Script's free-tier Web App serving layer under light/sporadic traffic, not fixable from any setting. If you're asked to debug backend flakiness again, don't assume it's a Supabase-side issue by default — Supabase's REST/RPC layer is a real hosted Postgres API, not a lightweight scripting sandbox, so the failure mode is structurally different. But do still sanity-check the basics (project not paused — Supabase's free tier pauses after ~1 week of inactivity; RLS/grants intact; anon key correct) before assuming it's "just flaky."
 
-| Action | Request fields | Response fields | Sheet effect |
-|---|---|---|---|
-| `assignId` | `yearsExperience`, `platforms`, `role` (all strings) | `id` (e.g. `"SME-3"`) | Appends a row to **Intake** |
-| `saveInterview` | `id`, `q2`..`q6` (strings) | — | Appends a row to **Interview** |
-| `submitGuess` | `id`, `findingNum` (1-6), `guess` (one of the 4 category strings) | `title`, `line`, `category` — **the reveal** | Appends a row to **CategoryValidation** (agreement columns blank) |
-| `submitAgreement` | `id`, `findingNum`, `agreement`, `correctCategory`, `couldAlsoBe` (all strings) | — | Finds the matching CategoryValidation row (by id+findingNum) and fills in the agreement columns |
-| `saveSUS` | `id`, `scores` (array of 10 integers 1-5) | `susScore` (0-100, computed server-side using standard SUS scoring) | Appends a row to **SUS** |
+### RLS + RPC design (why this isn't a plain CRUD API)
 
-`yearsExperience`, `platforms`, `agreement`, `correctCategory`, and `couldAlsoBe` are all sent as **plain strings**, even though the UI uses richer controls (slider, chips, toggle switch, ranked checkboxes) to produce them. This is deliberate — it means the Sheet schema and `Code.gs` never need to change when the frontend's input widgets change. If you add a new field that needs its own Sheet column, you must update **both** `Code.gs`'s action handler (the `appendRow`/`getRange` call) **and** `setupSheet()`'s header list, in the same column order, or you'll get silent column misalignment. Re-run `setupSheet()` only works for brand-new tabs — it will NOT retrofit new columns onto an existing tab with data in it. If a real Sheet already has participant data and you need a new column, add it manually via the Sheets UI in the correct position, or via a small one-off migration script — do not just change `Code.gs` and assume it'll match.
+Every table (`intake`, `interview`, `category_validation`, `sus`, `findings`) has Row Level Security enabled with **zero** policies — default-deny for the `anon` role Supabase's public API uses. The only way in or out is 5 `SECURITY DEFINER` Postgres functions, each `REVOKE`d from `PUBLIC` and explicitly `GRANT`ed to `anon`: `assign_id`, `save_interview`, `submit_guess`, `submit_agreement`, `save_sus`. Each pins `search_path = ''` and fully-qualifies every table reference (`public.*`) — this closes a real Postgres privilege-escalation footgun where an unpinned `search_path` on a `SECURITY DEFINER` function lets a caller shadow an unqualified name. **If you add a new RPC function, follow this exact pattern** (RLS-locked tables, `SECURITY DEFINER`, pinned `search_path`, explicit revoke-then-grant) — don't add a new table without RLS, and don't grant `anon` direct table access as a shortcut, or you reopen the exact hole this design closes. See `supabase/migration.sql` for the full commented implementation.
 
----
+### Backend contract (RPC functions)
 
-## Sheet schema (4 tabs, created by `setupSheet()`)
+All requests: `POST {SUPABASE_URL}/rest/v1/rpc/<function_name>`, headers `apikey`/`Authorization: Bearer <anon key>`, body is a JSON object of `p_`-prefixed parameters. All responses: `{"ok": true, ...}` or `{"ok": false, "error": "..."}`. `app.js`'s `callBackend()` translates the app's existing camelCase action/payload shape into this via `ACTION_MAP` — nothing above `callBackend()` needed to change during the migration.
 
-- **Intake**: Participant ID, Timestamp, Years of Experience, Platforms / Languages, Current Role
-- **Interview**: Participant ID, Timestamp, Q2..Q6 (5 columns)
-- **CategoryValidation**: Participant ID, Finding #, Line, Finding Title, Participant's Guess (blind), AI-Assigned Category (revealed), Agreement, If Disagree Correct Category, Could Also Be (ranked), Guess Timestamp, Agreement Timestamp — **one row per finding**, so 6 rows per participant, not 1
-- **SUS**: Participant ID, Timestamp, SUS1..SUS10, SUS Score (0-100)
+| Action (app.js) | RPC function | Params | Response fields | Effect |
+|---|---|---|---|---|
+| `assignId` | `assign_id` | `p_years_experience`, `p_platforms`, `p_role` | `id` (e.g. `"SME-3"`) | Inserts a row into `intake`; `id` is a generated column off an identity PK — atomic/race-safe under concurrent submissions |
+| `saveInterview` | `save_interview` | `p_id`, `p_q2`..`p_q6` | — | Upserts a row into `interview` (one row per participant) |
+| `submitGuess` | `submit_guess` | `p_id`, `p_finding_num` (1-6), `p_guess` | `title`, `line`, `category` — **the reveal** | Upserts a row into `category_validation` (agreement columns blank) |
+| `submitAgreement` | `submit_agreement` | `p_id`, `p_finding_num`, `p_agreement`, `p_correct_category`, `p_could_also_be` | — | Finds the matching `category_validation` row (by `participant_id`+`finding_num`) and fills in the agreement columns; errors if no matching guess row exists yet |
+| `saveSUS` | `save_sus` | `p_id`, `p_scores` (array of 10 integers 1-5) | `susScore` (0-100, computed server-side, standard SUS scoring) | Upserts a row into `sus` |
 
-Join on Participant ID across tabs for analysis.
+`yearsExperience`, `platforms`, `agreement`, `correctCategory`, and `couldAlsoBe` are all sent as **plain strings**, even though the UI uses richer controls (slider, chips, toggle switch, ranked checkboxes) to produce them — same reasoning as before the migration: the RPC functions never need to change when the frontend's input widgets change. If you add a new field that needs its own column, add it to the relevant table in `supabase/migration.sql` **and** update the corresponding function's `insert`/`update` — both, in the same change, or you get silent data loss (the function will just not persist the new field). Unlike the old Sheet-based setup, adding a column to an existing table with data in it is a normal `alter table ... add column ...` in the SQL Editor — no "retrofit" caveat.
+
+### Schema (5 tables, `supabase/migration.sql`)
+
+- **intake** — `participant_code` (generated, e.g. `SME-3`), timestamp, years of experience, platforms/languages, role
+- **interview** — participant_id, timestamp, Q2..Q6 (one row per participant)
+- **category_validation** — participant_id, finding_num, line, finding_title, guess (blind), ai_category (revealed), agreement, correct_category, could_also_be, guess_at, agreement_at — **one row per finding**, so 6 rows per participant, not 1
+- **sus** — participant_id, timestamp, sus1..sus10, sus_score
+- **findings** — server-only, locked down by RLS; the 6 planted issues with their real categories
+
+Join on `participant_id` across tables (via the Table Editor's relationships, or a SQL join) for analysis. The Table Editor in the Supabase dashboard gives a spreadsheet-like grid per table with CSV export — the rough equivalent of "open the Sheet" for a non-technical researcher.
 
 ---
 
 ## Deployment status (as of this handoff)
 
-**Nothing is deployed yet.** `config.js` still has the placeholder `WEB_APP_URL`, and `Code.gs` still has the placeholder `SHEET_ID`. `app.js` actually checks for this on load (`backendConfigured()`) and shows a "Setup needed" message instead of the real form if the URL looks unconfigured — this is intentional UX, not a bug, so don't be alarmed if you open `index.html` locally and see that screen instead of the intake form.
+**Nothing is deployed on the Supabase side yet.** `config.js` has the placeholder `SUPABASE_URL`/`SUPABASE_ANON_KEY`, and no Supabase project has been created. `app.js` checks for this on load (`backendConfigured()`) and shows a "Setup needed" message instead of the real form if unconfigured — this is intentional UX, not a bug. The user's plan (from `README.md`) is: create a Supabase project, run `supabase/migration.sql` in its SQL Editor, paste the project URL + anon key into `config.js`, then push to the existing GitHub Pages repo. If asked to "test it end to end," you cannot do so live against a real Supabase project without the user creating one first — use the stubbed-backend approach in `smoke_test.mjs` instead (see below), or ask the user to test the real deployment themselves.
 
-The user's plan (from `README.md`) is: deploy `Code.gs` as an Apps Script Web App bound to a new Google Sheet, then host the 4 frontend files (`index.html`, `style.css`, `app.js`, `config.js`) on GitHub Pages. Neither has happened yet as of this handoff. If asked to "test it end to end," you cannot do so live — no Google account or GitHub credentials are available in a typical sandboxed session. Use the stubbed-backend approach in `smoke_test.mjs` instead (see below), or ask the user to test the real deployment themselves.
+**Prior deployment (superseded):** a Google Apps Script backend was previously deployed and live-tested; it proved unreliable (see "Backend: Supabase" above) and was replaced. `gas/Code.gs` remains in the repo as reference but is not wired to anything.
 
 ---
 
 ## How to verify changes (do this before calling anything done)
 
 `smoke_test.mjs` is a Playwright script that:
-1. Intercepts `config.js` to inject a fake `WEB_APP_URL`
-2. Intercepts POST requests to that fake URL and returns realistic stubbed responses matching the real `Code.gs` contract above
+1. Intercepts `config.js` to inject fake `SUPABASE_URL`/`SUPABASE_ANON_KEY` values
+2. Intercepts POST requests to `**/rest/v1/rpc/*` and returns realistic stubbed responses matching the real RPC contract above (dispatching on the function name in the URL path, not a `body.action` field — different from how the old Apps Script stub worked)
 3. Drives the actual `app.js` through the entire flow via real DOM interactions (clicks, fills) — not mocked/injected content
-4. Asserts on real behavior: ID assignment, validation blocking (empty guess, incomplete SUS), the reveal only showing after guess submission, the stepper updating, the code line highlighting matching the current finding, zero console/page errors
-5. Screenshots each of the 6 major states to `preview/real-*.png`
+4. Asserts on real behavior: ID assignment, validation blocking (empty guess, incomplete SUS), the reveal only showing after guess submission, the stepper updating, the code line highlighting matching the current finding, resume-in-progress across reloads (including the guess-submitted-but-not-yet-agreed case, verifying no duplicate `submit_guess` call), zero console/page errors
+5. Screenshots each of the major states to `preview/real-*.png`
 
 Run it with:
 ```bash
@@ -110,38 +116,43 @@ cd <project folder>
 npm install playwright   # if not already available
 node smoke_test.mjs
 ```
-(If `node` can't resolve `playwright` via a normal `npm install` in your environment, you may need `PLAYWRIGHT_BROWSERS_PATH`/`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD` env vars or a local `node_modules/playwright` symlink to a global install — this was needed in one sandboxed environment already, may not apply to yours.)
+(If `node` can't resolve `playwright` via a normal `npm install` in your environment, you may need `PLAYWRIGHT_BROWSERS_PATH`/`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD` env vars or a local `node_modules/playwright` symlink to a global install — this was needed in one sandboxed environment already, may not apply to yours. `npx playwright install chromium` is needed the first time to fetch a real browser binary.)
 
 **Known non-bug:** `.section.active` and `.reveal-box` have a ~0.2-0.25s CSS fade-in animation. If you screenshot immediately after a state change without waiting, you'll capture a washed-out, partially-transparent frame that looks broken but isn't — it's mid-animation. Always `await page.waitForTimeout(300-350)` after a section/reveal transition before screenshotting, or check `smoke_test.mjs` for the pattern already in place. This bit us once already during this project; don't rediscover it as a "regression."
 
-After running the smoke test, actually **look at the screenshots** (don't just trust the assertions) — several real layout bugs during this project were only caught visually (a code block clipping long lines instead of wrapping, for instance), not by the assertions.
+After running the smoke test, actually **look at the screenshots** (don't just trust the assertions) — several real layout bugs during this project were only caught visually (a code block clipping long lines instead of wrapping, a stale post-reveal instruction line, for instance), not by the assertions.
+
+**The sandboxed browser preview tool cannot be trusted for this project's local `file://` pages** — it renders them as an unstyled "static snapshot" with no real CSS/JS execution, in at least one environment this project was worked in. Use Playwright (via `smoke_test.mjs` or a throwaway script) for any real visual/responsive verification instead.
 
 ---
 
 ## UX/design conventions already established (match these in any new work)
 
 - **No raw free-text where a structured control does the job better.** This was an explicit ask from the user partway through the project — see the years-of-experience slider, platform chips, agreement toggle, and ranked could-also-be checkboxes for the pattern to follow. If you're adding a new input, ask whether a slider/chips/toggle/pills would serve better than a text box before defaulting to `<input type="text">`.
-- **Never send a different payload shape to the backend just because the input widget changed.** Convert structured UI state back into the same string format the backend already expects (see "Backend contract" above). This keeps `Code.gs` stable across frontend iterations so the user doesn't have to redeploy the Apps Script for every UI tweak.
+- **Never send a different payload shape to the backend just because the input widget changed.** Convert structured UI state back into the same string format the backend already expects (see "Backend contract" above). This keeps the RPC functions stable across frontend iterations so the user doesn't have to touch `supabase/migration.sql` for every UI tweak.
 - **No em dashes in any UI copy or generated text.** This is a standing convention across the user's whole thesis project (enforced elsewhere via an explicit "dash-check" step in their document-editing workflow). Use a comma, semicolon, or restructure the sentence instead.
 - **Progress stepper at the top must stay in sync** with whatever section is actually showing — `updateStepper()` in app.js is the single place this happens, driven by `showSection()`. If you add a new section, add it to `STEP_ORDER` and give it a `<div class="step" data-step="...">` entry in `index.html`.
 - Visual style: serif body font (Georgia/Times), navy (`#16324a`) + teal (`#1b6fa8`) palette, pill-shaped badges/chips, generous whitespace, minimal iconography (none currently — text and color do the work). Keep new UI consistent with this rather than introducing a new visual language.
+- **Exception, scoped to the CVE section only:** the source panel and finding card there deliberately adopt the real Glance mobile app's own visual language (quiet neutral panels, category dot/color system, monospace source lines, system-font stand-ins for IBM Plex Sans/JetBrains Mono) instead of the serif/navy/teal identity — see the `.cve-glance`-scoped CSS block in `style.css` and its comments. This was a deliberate, explicitly-requested exception, not drift; don't "fix" it back to match the rest of the page, and don't let it leak into Intake/Interview/SUS.
+- **CVE layout is side-by-side above 600px** (code on the left in `.col-code`, the question in a sticky `.col-finding` on the right), stacking vertically below that breakpoint. The source panel auto-scrolls the current finding's line into view (`scrollToCurrentLine()` in app.js) rather than leaving the participant to hunt for the highlight manually.
 
 ---
 
 ## Things NOT to do without checking with the user first
 
-- Don't add localStorage/sessionStorage without confirming it's wanted — it would be a genuinely useful feature (resume an interrupted session), but changes the privacy story slightly (participant data would briefly sit in browser storage) and the user hasn't asked for it yet.
-- Don't change the participant ID scheme (`SME-N`, sequential, assigned server-side) — it's referenced by this exact convention in the thesis's own supporting documents (SME Interview Draft Questions, Post-Viva materials).
-- Don't add analytics, external fonts, or any third-party script tags — this is a small academic-research instrument, not a product; minimize external dependencies and privacy surface area.
+- Don't add localStorage/sessionStorage without confirming it's wanted — already added (resume-in-progress), see above; this note is about *additional* client-side storage beyond that, if ever proposed.
+- Don't change the participant ID scheme (`SME-N`, sequential, assigned server-side) — it's referenced by this exact convention in the thesis's own supporting documents (SME Interview Draft Questions, Post-Viva materials). The Supabase migration preserves this exactly (see `intake.participant_code`).
+- Don't add analytics, external fonts, or any third-party script tags — this is a small academic-research instrument, not a product; minimize external dependencies and privacy surface area. This includes not adding the `@supabase/supabase-js` SDK — plain `fetch()` against Supabase's REST/RPC endpoints is the deliberate choice, see "File map" above.
 - Don't change the 4 feedback categories (Code Quality / Bugs / Optimization / Readability) or their definitions — these are fixed by the thesis's own taxonomy, not this tool's to redefine.
+- Don't grant `anon` direct table access on any Supabase table, or add a new table without Row Level Security enabled, as a shortcut around writing a proper `SECURITY DEFINER` function — this is exactly the hole the current backend design closes; see "RLS + RPC design" above.
 
 ---
 
 ## Reasonable next steps, if asked for enhancement ideas (not a to-do list, just context)
 
-- Resume-in-progress support (localStorage-backed) so a researcher can survive an accidental tab close mid-interview — ask the user first, per above.
-- A researcher-only "review before submit" screen at the end of each section, in case they want to correct a typo before it's written to the Sheet (currently every section submit is immediate/final).
-- Exporting a printable/PDF summary of one participant's full session from the Sheet, for attaching to thesis appendices.
+- A researcher-only "review before submit" screen at the end of each section, in case they want to correct a typo before it's written to the database (currently every section submit is immediate/final).
+- Exporting a printable/PDF summary of one participant's full session from Supabase, for attaching to thesis appendices.
 - Accessibility pass (keyboard navigation through the custom radio-pill/chip controls, ARIA roles) — the current controls are clickable divs with a native `<input>` inside for semantics, but haven't been tested with a screen reader.
+- Closing the "deliberate direct RPC call" gap noted in "The blind-reveal boundary" above, via a per-participant server-issued single-use token — a real design change, not a quick fix, only worth it if the threat model genuinely calls for it.
 
 None of these were requested yet. Confirm scope with the user before building any of them.
