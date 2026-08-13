@@ -35,6 +35,7 @@ create table public.intake (
   years_experience  text,
   platforms         text,
   role              text,
+  study_path        text not null default 'full_sme' check (study_path in ('full_sme', 'sus_only')),
   constraint intake_participant_code_unique unique (participant_code)
 );
 
@@ -208,13 +209,29 @@ create or replace function public.assign_id(
 ) returns jsonb language plpgsql security definer set search_path = '' as $$
 declare v_code text;
 begin
-  insert into public.intake (years_experience, platforms, role)
-  values (p_years_experience, p_platforms, p_role)
+  insert into public.intake (years_experience, platforms, role, study_path)
+  values (p_years_experience, p_platforms, p_role, 'full_sme')
   returning participant_code into v_code;
   return jsonb_build_object('ok', true, 'id', v_code);
 end; $$;
 revoke all on function public.assign_id(text, text, text) from public;
 grant execute on function public.assign_id(text, text, text) to anon;
+
+-- The browser code only selects a supervised study route. This separate,
+-- intentionally narrow RPC mints an otherwise-empty intake row for a
+-- SUS-only participant, so it receives the same anonymous SME-N convention
+-- without collecting SME-only background data.
+create or replace function public.assign_sus_only_id()
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare v_code text;
+begin
+  insert into public.intake (study_path)
+  values ('sus_only')
+  returning participant_code into v_code;
+  return jsonb_build_object('ok', true, 'id', v_code);
+end; $$;
+revoke all on function public.assign_sus_only_id() from public;
+grant execute on function public.assign_sus_only_id() to anon;
 
 
 -- Consent must be explicitly true and match the deployed form version. The

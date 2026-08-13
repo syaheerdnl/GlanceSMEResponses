@@ -56,7 +56,7 @@
         <p>Your participant profile is assigned anonymously after the next page. No response is saved on this page.</p>
       </div>
 
-      <button id="btn-cover-start" class="start-button">Start the SME interview</button>
+      <button id="btn-cover-start" class="start-button">Start study session</button>
       <p class="service-meta">Researcher: Muhammad Syaheer Daniel (M032510005) &middot; Supervisor: Dr. Nor Hafeizah</p>
     </div>
   </section>
@@ -70,10 +70,10 @@
 
       <div class="consent-summary">
         <h3>Purpose and activities</h3>
-        <p>This study evaluates Glance, a mobile AI-assisted code review application for Dart and Kotlin. The session includes a demonstration, interview questions, a category-validation exercise, one guided hands-on task, and the System Usability Scale questionnaire.</p>
+        <p>This study evaluates Glance, a mobile AI-assisted code review application for Dart and Kotlin. Every session includes a demonstration, one guided hands-on task, and the System Usability Scale questionnaire. An invited SME session also includes background, interview, and category-validation questions.</p>
 
         <h3>What is recorded</h3>
-        <p>Your professional background, interview responses, category-validation answers, hands-on task milestone timestamps, and SUS responses will be recorded under an anonymous participant ID. Your name is used only on screen to confirm the interview participant and is not saved in the study database.</p>
+        <p>The responses relevant to your assigned session, including hands-on task milestone timestamps and SUS answers, will be recorded under an anonymous participant ID. Invited SME sessions also record professional background, interview, and category-validation answers. Your name is used only on screen to confirm an interview participant and is not saved in the study database.</p>
 
         <h3>Your choice</h3>
         <p>Taking part is voluntary. You may ask to pause or stop before submitting an answer. The application is being evaluated, not your professional performance.</p>
@@ -90,6 +90,27 @@
       <div class="button-row">
         <button type="button" class="secondary" id="btn-consent-decline">I do not consent</button>
         <button id="btn-consent-continue">I consent and continue</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STUDY PATH: FULL SME CODE OR SUS-ONLY ============ -->
+  <section id="section-access" class="section" aria-labelledby="access-title">
+    <div class="card access-card">
+      <p class="pill">Session selection</p>
+      <h2 id="access-title">Study access</h2>
+      <p id="access-summary">If the researcher gave you an SME access code, enter it to continue with the full SME session. Otherwise, continue to the usability session.</p>
+
+      <div id="access-code-block">
+        <label for="access-code">SME access code</label>
+        <input type="password" id="access-code" inputmode="numeric" autocomplete="one-time-code" maxlength="4">
+        <p class="help">The code is only used to select the study path. It does not identify you or create an account.</p>
+      </div>
+
+      <div id="access-error" class="error hidden" role="alert"></div>
+      <div class="button-row access-actions">
+        <button id="btn-access-sme">Continue as SME</button>
+        <button type="button" class="secondary" id="btn-access-sus">Continue to usability session</button>
       </div>
     </div>
   </section>
@@ -150,7 +171,7 @@
     <div class="card">
       <p class="pill" id="id-badge-demo"></p>
       <h2>Application Demonstration</h2>
-      <p class="help">Watch this short walkthrough of the application before the interview questions &mdash; the next section asks about what you observed here.</p>
+      <p class="help" id="demo-help">Watch this short walkthrough of the application before the interview questions; the next section asks about what you observed here.</p>
       <video id="demo-video" controls preload="metadata" src="glance-overview.mp4"></video>
       <div class="button-row">
         <button type="button" class="secondary" id="btn-demo-back">Back</button>

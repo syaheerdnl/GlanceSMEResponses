@@ -56,6 +56,7 @@ const FINDINGS = {
 
 var submitGuessCallCount = {}; // findingNum -> count, so the resume test can prove no duplicate POST
 var assignIdCallCount = 0; // proves the Back-to-Intake guard doesn't mint a second participant ID
+var assignSusOnlyIdCallCount = 0;
 var saveConsentCallCount = 0;
 var lastConsentPayload = null;
 var handsOnMilestoneCallCount = {}; // milestone -> count; the task RPC must be idempotent client-side too
@@ -83,6 +84,12 @@ await page.route('**/rest/v1/rpc/*', async (route) => {
       // app.js guard against re-submitting Intake is actually exercised,
       // not just assumed.
       resp = { ok: true, id: 'SME-' + assignIdCallCount };
+      break;
+    case 'assign_sus_only_id':
+      assert(Object.keys(body).length === 0, 'SUS-only assignment RPC receives no browser code or participant data');
+      assignSusOnlyIdCallCount++;
+      // Both assignment RPCs share the same identity-backed SME-N sequence.
+      resp = { ok: true, id: 'SME-' + (assignIdCallCount + assignSusOnlyIdCallCount) };
       break;
     case 'save_consent':
       saveConsentCallCount++;
@@ -149,7 +156,16 @@ await page.click('#btn-consent-decline');
 assert(await page.locator('#consent-declined:not(.hidden)').count() === 1, 'declining consent records no response and explains the next choice');
 await page.check('#consent-agree');
 await page.click('#btn-consent-continue');
+await page.waitForSelector('#section-access.active');
+assert(await page.locator('#stepper.hidden').count() === 1, 'stepper remains hidden while the researcher-supervised study path is selected');
+await shot('real-0c-study-access.png');
+await page.fill('#access-code', '1234');
+await page.click('#btn-access-sme');
+assert(await page.locator('#access-error:not(.hidden)').count() === 1, 'wrong SME code does not switch the participant to a different study path');
+await page.fill('#access-code', '0811');
+await page.click('#btn-access-sme');
 await page.waitForSelector('#section-intake.active');
+assert(!(await page.evaluate(() => localStorage.getItem('smeSession_v1'))).includes('0811'), 'browser access code is not persisted in the session');
 await shot('real-1-intake.png');
 
 // --- 1b. Resume boundary: typing into Intake (unsubmitted) and reloading must NOT
@@ -163,6 +179,9 @@ await page.click('#btn-cover-start');
 await page.waitForSelector('#section-consent.active');
 await page.check('#consent-agree');
 await page.click('#btn-consent-continue');
+await page.waitForSelector('#section-access.active');
+await page.fill('#access-code', '0811');
+await page.click('#btn-access-sme');
 await page.waitForSelector('#section-intake.active');
 assert((await page.inputValue('#in-role')) === '', 'unsubmitted intake field is not restored (was never persisted)');
 
@@ -425,6 +444,46 @@ await page.reload();
 await page.waitForTimeout(200);
 assert(await page.locator('#resume-banner:not(.hidden)').count() === 0, 'no resume banner after a completed run (session was cleared)');
 assert(await page.locator('#section-cover.active').count() === 1, 'a completed run reloads fresh at the study cover, not back at Done');
+
+// --- 8. SUS-only route: no code creates a distinct anonymous record, skips
+// SME-only sections, still completes the real hands-on step before SUS. ---
+await page.click('#btn-cover-start');
+await page.waitForSelector('#section-consent.active');
+await page.check('#consent-agree');
+await page.click('#btn-consent-continue');
+await page.waitForSelector('#section-access.active');
+await page.click('#btn-access-sus');
+await page.waitForSelector('#section-demo.active');
+assert(assignSusOnlyIdCallCount === 1, 'SUS-only route calls its narrow ID-assignment RPC exactly once');
+assert(saveConsentCallCount === 2, 'SUS-only participant consent is recorded after the anonymous ID is assigned');
+assert(lastConsentPayload.p_id === 'SME-2', 'SUS-only consent is linked to the next anonymous SME-N ID');
+assert((await page.textContent('#id-badge-demo')).trim() === 'SME-2', 'SUS-only route displays its assigned anonymous ID');
+assert((await page.textContent('#demo-help')).includes('guided hands-on task'), 'SUS-only demo explains its shorter route');
+assert(await page.locator('.step[data-step="intake"].hidden').count() === 1, 'SUS-only stepper hides Background');
+assert(await page.locator('.step[data-step="interview"].hidden').count() === 1, 'SUS-only stepper hides Interview');
+assert(await page.locator('.step[data-step="cve"].hidden').count() === 1, 'SUS-only stepper hides Category Check');
+assert((await page.locator('.step:not(.hidden)').count()) === 4, 'SUS-only stepper contains only Demo, Hands-on, SUS, and Done');
+
+// A reload keeps the same path and participant ID rather than minting another.
+await page.reload();
+await page.waitForTimeout(250);
+assert(await page.locator('#section-demo.active').count() === 1, 'SUS-only route resumes on its saved demonstration step');
+assert((await page.textContent('#id-badge-demo')).trim() === 'SME-2', 'SUS-only resume retains the same participant ID');
+assert(assignSusOnlyIdCallCount === 1, 'SUS-only resume does not mint another participant ID');
+
+await page.click('#btn-demo-continue');
+await page.waitForSelector('#section-prototype.active');
+assert(await page.locator('#btn-prototype-continue:disabled').count() === 1, 'SUS-only route still locks SUS until the hands-on task is complete');
+const susOnlyNonce = await page.evaluate(() => JSON.parse(localStorage.getItem('smeSession_v1')).prototype.nonce);
+await sendPrototypeMilestone('opened', susOnlyNonce);
+await sendPrototypeMilestone('review-completed', susOnlyNonce);
+await sendPrototypeMilestone('feedback-opened', susOnlyNonce);
+await sendPrototypeMilestone('fix-applied', susOnlyNonce);
+assert(handsOnMilestoneCallCount.opened === 2 && handsOnMilestoneCallCount['fix-applied'] === 2, 'SUS-only hands-on milestones are recorded for its own participant');
+assert(await page.locator('#btn-prototype-continue:not(:disabled)').count() === 1, 'SUS-only route unlocks SUS only after all four hands-on milestones');
+await page.click('#btn-prototype-continue');
+await page.waitForSelector('#section-sus.active');
+assert((await page.locator('#sus-items > .sus-item').count()) === 10, 'SUS-only route reaches the same 10-item SUS instrument');
 
 console.log('errors observed:', errors);
 assert(errors.length === 0, 'no console/page errors during the whole flow');

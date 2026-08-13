@@ -153,6 +153,7 @@ header p:last-of-type {
 .step.done .step-dot { background: var(--ok); }
 .step.done .step-dot::before { content: "\2713"; }
 .step.done .step-label { color: var(--ok); }
+.step.step-last::after { display: none; }
 
 main {
   max-width: 1180px;
@@ -412,6 +413,7 @@ label.checkbox-inline {
 label.checkbox-inline input { margin: 0; }
 
 input[type="text"],
+input[type="password"],
 textarea,
 select {
   width: 100%;
@@ -426,6 +428,7 @@ select {
 }
 
 input[type="text"]:focus,
+input[type="password"]:focus,
 textarea:focus,
 select:focus {
   outline: 3px solid var(--accent);
@@ -442,6 +445,19 @@ textarea.autogrow { resize: none; }
   color: var(--muted);
   line-height: 1.55;
   margin-top: 4px;
+}
+
+/* ---- Study-path selector ---- */
+
+.access-card { max-width: 680px; }
+
+.access-actions {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.access-actions button {
+  margin-top: 18px;
 }
 
 /* ---- Years-of-experience slider ---- */
