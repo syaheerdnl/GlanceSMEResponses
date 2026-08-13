@@ -51,7 +51,9 @@ There is no build step, no package.json-driven bundler, no framework. Everything
 
 `app.js` has a parallel `FINDINGS_PUBLIC` array — same findings, **same line numbers and titles, but no `category` field**. This is intentional duplication, not a bug: line/title are safe to ship to the client (the researcher already reads these aloud per the exercise's own script; `renderFinding()` shows the title and line up front), the category is not.
 
-The flow: client calls the `submit_guess` RPC (`POST {SUPABASE_URL}/rest/v1/rpc/submit_guess`) with `{p_id, p_finding_num, p_guess}` → the Postgres function (running `SECURITY DEFINER`, so it can read the locked-down `findings` table) looks up the real category, **inserts** the guess+category into `category_validation`, and **only then** returns `{title, line, category}` in its response — the write happens before the reveal, in the same transaction. `revealFinding()` in app.js is the only place the category ever touches the DOM, and `state.revealedFindings` (used to keep already-revealed findings colored in the source panel as the participant progresses) is only ever populated inside `revealFinding()`, never earlier.
+The flow: client calls the `submit_guess` RPC (`POST {SUPABASE_URL}/rest/v1/rpc/submit_guess`) with `{p_id, p_finding_num, p_guess}` → the Postgres function (running `SECURITY DEFINER`, so it can read the locked-down `findings` table) looks up the real category, **inserts** the guess+category into `category_validation`, and **only then** returns `{title, line, category, explanation}` in its response — the write happens before the reveal, in the same transaction. `revealFinding()` in app.js is the only place the category (or the explanation) ever touches the DOM, and `state.revealedFindings` (used to keep already-revealed findings colored in the source panel as the participant progresses) is only ever populated inside `revealFinding()`, never earlier.
+
+**`explanation` (the "why" the app assigned that category) gets the exact same gate as `category` itself, not a looser one.** It's a column on the same locked-down `findings` table, only ever returned by `submit_guess`, same as category — never in `FINDINGS_PUBLIC`. This matters because the explanation text alone (e.g. "the merchant key is embedded as a string literal") gives the category away just as effectively as printing the label would, so treating it as "just descriptive text, safe to show early" would quietly reopen the boundary. If you ever add more per-finding fields, ask the same question before deciding where they're safe to live: does this field, on its own, let someone infer the category before their guess? If yes, it belongs in `findings`/`submit_guess`'s response, not `FINDINGS_PUBLIC`.
 
 **If you ever change the findings** (different demo file, different planted issues, etc.), you must update both the `insert into findings` block in `supabase/migration.sql` (with category) and `FINDINGS_PUBLIC` in `app.js` (without category) — and re-run the changed `insert`/table setup in the Supabase SQL Editor, plus double check nothing in app.js accidentally imports or hardcodes a category value anywhere else.
 
@@ -75,7 +77,7 @@ All requests: `POST {SUPABASE_URL}/rest/v1/rpc/<function_name>`, headers `apikey
 |---|---|---|---|---|
 | `assignId` | `assign_id` | `p_years_experience`, `p_platforms`, `p_role` | `id` (e.g. `"SME-3"`) | Inserts a row into `intake`; `id` is a generated column off an identity PK — atomic/race-safe under concurrent submissions |
 | `saveInterview` | `save_interview` | `p_id`, `p_q2`..`p_q6` | — | Upserts a row into `interview` (one row per participant) |
-| `submitGuess` | `submit_guess` | `p_id`, `p_finding_num` (1-6), `p_guess` | `title`, `line`, `category` — **the reveal** | Upserts a row into `category_validation` (agreement columns blank) |
+| `submitGuess` | `submit_guess` | `p_id`, `p_finding_num` (1-6), `p_guess` | `title`, `line`, `category`, `explanation` — **the reveal** | Upserts a row into `category_validation` (agreement columns blank) |
 | `submitAgreement` | `submit_agreement` | `p_id`, `p_finding_num`, `p_agreement`, `p_correct_category`, `p_could_also_be` | — | Finds the matching `category_validation` row (by `participant_id`+`finding_num`) and fills in the agreement columns; errors if no matching guess row exists yet |
 | `saveSUS` | `save_sus` | `p_id`, `p_scores` (array of 10 integers 1-5) | `susScore` (0-100, computed server-side, standard SUS scoring) | Upserts a row into `sus` |
 
@@ -87,7 +89,7 @@ All requests: `POST {SUPABASE_URL}/rest/v1/rpc/<function_name>`, headers `apikey
 - **interview** — participant_id, timestamp, Q2..Q6 (one row per participant)
 - **category_validation** — participant_id, finding_num, line, finding_title, guess (blind), ai_category (revealed), agreement, correct_category, could_also_be, guess_at, agreement_at — **one row per finding**, so 6 rows per participant, not 1
 - **sus** — participant_id, timestamp, sus1..sus10, sus_score
-- **findings** — server-only, locked down by RLS; the 6 planted issues with their real categories
+- **findings** — server-only, locked down by RLS; the 6 planted issues with their real categories and a one-paragraph "why" explanation, both gated identically (see "The blind-reveal boundary" above)
 
 Join on `participant_id` across tables (via the Table Editor's relationships, or a SQL join) for analysis. The Table Editor in the Supabase dashboard gives a spreadsheet-like grid per table with CSV export — the rough equivalent of "open the Sheet" for a non-technical researcher.
 

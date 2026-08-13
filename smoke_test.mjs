@@ -15,12 +15,12 @@ const FAKE_CONFIG = "const SUPABASE_URL = 'https://fake-project.supabase.co'; co
 // including the line number (a prior version of this stub hardcoded line: 0,
 // which nothing checked until the reveal UI started displaying it).
 const FINDINGS = {
-  1: { line: 5,  title: 'Hardcoded Production API Key',          category: 'Code Quality' },
-  2: { line: 28, title: 'Incorrect Refund Calculation Logic',     category: 'Bugs' },
-  3: { line: 40, title: 'Empty Catch Block Suppresses Failures',  category: 'Bugs' },
-  4: { line: 17, title: 'Sequential Await in Loop',               category: 'Optimization' },
-  5: { line: 44, title: 'Inefficient Duplicate Reference Check',  category: 'Optimization' },
-  6: { line: 51, title: 'Imperative String Joining',              category: 'Readability' }
+  1: { line: 5,  title: 'Hardcoded Production API Key',          category: 'Code Quality',  explanation: 'The production merchant key is embedded directly in the source as a string literal.' },
+  2: { line: 28, title: 'Incorrect Refund Calculation Logic',     category: 'Bugs',           explanation: 'A refunded transaction amount is subtracted twice, over-correcting the total.' },
+  3: { line: 40, title: 'Empty Catch Block Suppresses Failures',  category: 'Bugs',           explanation: 'Every exception from a failed payment retry is silently discarded here.' },
+  4: { line: 17, title: 'Sequential Await in Loop',               category: 'Optimization',   explanation: 'Each payment in the batch is awaited before the next one starts.' },
+  5: { line: 44, title: 'Inefficient Duplicate Reference Check',  category: 'Optimization',   explanation: 'This check scans the entire recentRefs list linearly on every call.' },
+  6: { line: 51, title: 'Imperative String Joining',              category: 'Readability',    explanation: 'The loop manually tracks the index to decide when to add a separator.' }
 };
 
 var submitGuessCallCount = {}; // findingNum -> count, so the resume test can prove no duplicate POST
@@ -50,7 +50,7 @@ await page.route('**/rest/v1/rpc/*', async (route) => {
     case 'submit_guess': {
       submitGuessCallCount[body.p_finding_num] = (submitGuessCallCount[body.p_finding_num] || 0) + 1;
       const f = FINDINGS[body.p_finding_num];
-      resp = { ok: true, title: f.title, category: f.category, line: f.line };
+      resp = { ok: true, title: f.title, category: f.category, line: f.line, explanation: f.explanation };
       break;
     }
     case 'submit_agreement':
@@ -151,6 +151,7 @@ await shot('real-3-cve-before-reveal.png');
 const dotStyleBefore = await page.locator('#finding-dot').evaluate((el) => getComputedStyle(el).backgroundColor);
 assert(await page.locator('#finding-dot.revealed').count() === 0, 'finding dot not marked revealed before a guess');
 assert(dotStyleBefore === 'rgba(0, 0, 0, 0)' || dotStyleBefore === 'transparent', 'finding dot has no fill color before a guess (' + dotStyleBefore + ')');
+assert((await page.textContent('#reveal-explanation')).trim() === '', 'the "why" explanation is not present before a guess either — same gate as the category, since it would give the category away just as much');
 
 // --- 4. Try to submit without picking a category: expect validation error ---
 await page.click('#btn-submit-guess');
@@ -164,6 +165,7 @@ await page.waitForTimeout(350); // let the reveal-box fade-in animation finish b
 assert((await page.textContent('#reveal-text')).includes('Hardcoded Production API Key') === false, 'reveal-text no longer duplicates the title (shown up front instead)');
 assert((await page.textContent('#reveal-text')).includes('Code Quality'), 'reveal shows correct category');
 assert((await page.textContent('#cve-finding-meta')).includes('Code Quality') && (await page.textContent('#cve-finding-meta')).includes('Line 5'), 'finding meta line updates to Category · Line N after reveal');
+assert((await page.textContent('#reveal-explanation')).includes('merchant key'), 'the "why" explanation shows after reveal, alongside the category');
 assert(await page.locator('#finding-dot.revealed').count() === 1, 'finding dot marked revealed after the guess is submitted');
 assert(await page.locator('#code-listing .code-line.flagged').count() === 1, 'exactly one line now carries the revealed category color');
 assert(submitGuessCallCount[1] === 1, 'exactly one submitGuess POST sent for finding 1 so far');
@@ -185,6 +187,7 @@ assert(await page.locator('#section-cve.active').count() === 1, 'reload resumes 
 assert(await page.locator('#btn-submit-guess:not(.hidden)').count() === 0, 'guess button stays hidden on resume — not re-prompting for a guess already recorded');
 assert(await page.locator('#reveal-box:not(.hidden)').count() === 1, 'reveal box is shown immediately on resume');
 assert((await page.textContent('#reveal-text')).includes('Code Quality'), 'resumed reveal still shows the correct category');
+assert((await page.textContent('#reveal-explanation')).includes('merchant key'), 'resumed reveal still shows the "why" explanation too');
 assert(await page.locator('#finding-dot.revealed').count() === 1, 'finding dot still shows revealed after resume');
 assert(await page.locator('#code-listing .code-line.flagged').count() === 1, 'code panel still shows the revealed line colored after resume');
 assert(submitGuessCallCount[1] === 1, 'resuming did NOT re-POST submitGuess for finding 1 (still exactly one call)');

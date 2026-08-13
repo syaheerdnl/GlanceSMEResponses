@@ -80,19 +80,27 @@ create table public.sus (
 
 -- Server-only. The ONLY place a category exists before a guess.
 create table public.findings (
-  num      smallint primary key check (num between 1 and 6),
-  line     smallint not null,
-  title    text not null,
-  category text not null check (category in ('Code Quality','Bugs','Optimization','Readability'))
+  num         smallint primary key check (num between 1 and 6),
+  line        smallint not null,
+  title       text not null,
+  category    text not null check (category in ('Code Quality','Bugs','Optimization','Readability')),
+  explanation text not null -- the "why" — gated exactly like category, only ever
+                             -- returned by submit_guess after the guess is recorded
 );
 
-insert into public.findings (num, line, title, category) values
-  (1, 5,  'Hardcoded Production API Key',          'Code Quality'),
-  (2, 28, 'Incorrect Refund Calculation Logic',     'Bugs'),
-  (3, 40, 'Empty Catch Block Suppresses Failures',  'Bugs'),
-  (4, 17, 'Sequential Await in Loop',                'Optimization'),
-  (5, 44, 'Inefficient Duplicate Reference Check',   'Optimization'),
-  (6, 51, 'Imperative String Joining',                'Readability');
+insert into public.findings (num, line, title, category, explanation) values
+  (1, 5,  'Hardcoded Production API Key', 'Code Quality',
+   'The production merchant key is embedded directly in the source as a string literal. Anyone with access to the repository, a build artifact, or a decompiled binary can extract it and impersonate this app to the payment gateway. Load it from a secure runtime config or environment variable instead, never commit it to source.'),
+  (2, 28, 'Incorrect Refund Calculation Logic', 'Bugs',
+   'A refunded transaction''s amount was already added to the running total on the line above, then subtracted twice here via the "* 2" multiplier, over-correcting the total into negative territory instead of simply netting it out to zero. The multiplier should be removed.'),
+  (3, 40, 'Empty Catch Block Suppresses Failures', 'Bugs',
+   'Every exception from a failed payment retry is silently discarded here. If all attempts throw, the function just returns null with no trace of what actually went wrong, so failures become invisible to logs, monitoring, and the caller alike.'),
+  (4, 17, 'Sequential Await in Loop', 'Optimization',
+   'Each payment in the batch is awaited before the next one starts, even though the requests are independent of each other. Total time scales linearly with the number of billers; issuing them concurrently (e.g. with Future.wait) would cut batch latency down to roughly the slowest single call.'),
+  (5, 44, 'Inefficient Duplicate Reference Check', 'Optimization',
+   'This check scans the entire recentRefs list linearly on every call. If it runs frequently against a growing list, the cost adds up; storing recent references in a Set would make each lookup near-constant time instead of O(n).'),
+  (6, 51, 'Imperative String Joining', 'Readability',
+   'The loop manually tracks the index to decide when to add a separator, which takes more effort to read than the join it''s replicating. Expressing the same intent directly, e.g. p.join(''/''), would be immediately clear instead of hidden behind index bookkeeping.');
 
 -- ============================================================
 -- Row Level Security — default-deny on every table.
@@ -197,7 +205,7 @@ begin
   on conflict (participant_id, finding_num) do update
     set guess = excluded.guess, ai_category = excluded.ai_category, guess_at = now();
 
-  return jsonb_build_object('ok', true, 'title', v_finding.title, 'line', v_finding.line, 'category', v_finding.category);
+  return jsonb_build_object('ok', true, 'title', v_finding.title, 'line', v_finding.line, 'category', v_finding.category, 'explanation', v_finding.explanation);
 exception when foreign_key_violation then
   return jsonb_build_object('ok', false, 'error', 'Unknown participant id: ' || p_id);
 end; $$;

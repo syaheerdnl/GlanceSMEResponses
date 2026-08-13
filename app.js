@@ -821,6 +821,11 @@
     box.classList.remove('hidden');
     $('reveal-text').innerHTML =
       'Application assigned this to: <strong>' + escapeHtml(data.category) + '</strong>';
+    // The "why" explanation gets the exact same blind-reveal treatment as
+    // the category itself — it only ever arrives in this same submitGuess
+    // response, never before, since it would give the category away just
+    // as effectively as printing the label.
+    $('reveal-explanation').textContent = data.explanation || '';
 
     // "If you disagree, what is the correct category?" only makes sense
     // once they've actually said they disagree — shown on "No", hidden
