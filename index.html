@@ -23,10 +23,11 @@
 <!-- Progress stepper: app.js toggles .done / .current on these as sections change -->
 <nav class="stepper" id="stepper" aria-label="Progress">
   <div class="step" data-step="intake"><span class="step-dot">1</span><span class="step-label">Background</span></div>
-  <div class="step" data-step="interview"><span class="step-dot">2</span><span class="step-label">Interview</span></div>
-  <div class="step" data-step="cve"><span class="step-dot">3</span><span class="step-label">Category Check</span></div>
-  <div class="step" data-step="sus"><span class="step-dot">4</span><span class="step-label">SUS</span></div>
-  <div class="step" data-step="done"><span class="step-dot">5</span><span class="step-label">Done</span></div>
+  <div class="step" data-step="demo"><span class="step-dot">2</span><span class="step-label">Demo</span></div>
+  <div class="step" data-step="interview"><span class="step-dot">3</span><span class="step-label">Interview</span></div>
+  <div class="step" data-step="cve"><span class="step-dot">4</span><span class="step-label">Category Check</span></div>
+  <div class="step" data-step="sus"><span class="step-dot">5</span><span class="step-label">SUS</span></div>
+  <div class="step" data-step="done"><span class="step-dot">6</span><span class="step-label">Done</span></div>
 </nav>
 
 <main>
@@ -82,6 +83,20 @@
     </div>
   </section>
 
+  <!-- ============ SECTION DEMO: APPLICATION DEMONSTRATION ============ -->
+  <section id="section-demo" class="section">
+    <div class="card">
+      <p class="pill" id="id-badge-demo"></p>
+      <h2>Application Demonstration</h2>
+      <p class="help">Watch this short walkthrough of the application before the interview questions &mdash; the next section asks about what you observed here.</p>
+      <video id="demo-video" controls preload="metadata" src="glance-overview.mp4"></video>
+      <div class="button-row">
+        <button type="button" class="secondary" id="btn-demo-back">Back</button>
+        <button id="btn-demo-continue">Continue to Interview</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ SECTION 1: INTERVIEW Q2-Q6 ============ -->
   <section id="section-interview" class="section">
     <div class="card">
@@ -111,7 +126,10 @@
 
       <div class="status hidden" id="interview-draft-status">Draft saved</div>
       <div id="interview-error" class="error hidden"></div>
-      <button id="btn-interview-submit">Continue to Category Validation Exercise</button>
+      <div class="button-row">
+        <button type="button" class="secondary" id="btn-interview-back">Back</button>
+        <button id="btn-interview-submit">Continue to Category Validation Exercise</button>
+      </div>
     </div>
   </section>
 

@@ -355,6 +355,24 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* Back + Continue pairs (Demo, Interview) — Continue stays visually
+   primary, Back stays secondary, per the existing button.secondary style. */
+.button-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.button-row button { margin-top: 18px; }
+
+#demo-video {
+  display: block;
+  width: 100%;
+  border-radius: 8px;
+  margin-top: 10px;
+  background: #000;
+}
+
 .error {
   color: #b91c1c;
   font-size: 0.9rem;

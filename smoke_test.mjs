@@ -24,6 +24,7 @@ const FINDINGS = {
 };
 
 var submitGuessCallCount = {}; // findingNum -> count, so the resume test can prove no duplicate POST
+var assignIdCallCount = 0; // proves the Back-to-Intake guard doesn't mint a second participant ID
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 900, height: 1100 } });
@@ -42,7 +43,12 @@ await page.route('**/rest/v1/rpc/*', async (route) => {
   let resp;
   switch (fnName) {
     case 'assign_id':
-      resp = { ok: true, id: 'SME-1' };
+      assignIdCallCount++;
+      // Real assign_id always mints a fresh SME-N — a second call would be
+      // SME-2. Returning that here (rather than hardcoding SME-1) means the
+      // app.js guard against re-submitting Intake is actually exercised,
+      // not just assumed.
+      resp = { ok: true, id: 'SME-' + assignIdCallCount };
       break;
     case 'save_interview':
       resp = { ok: true };
@@ -97,7 +103,7 @@ assert(await page.locator('#section-intake.active').count() === 1, 'reload befor
 assert(await page.locator('#resume-banner:not(.hidden)').count() === 0, 'resume banner still hidden — unsubmitted intake fields are not a resumable session');
 assert((await page.inputValue('#in-role')) === '', 'unsubmitted intake field is not restored (was never persisted)');
 
-// --- 2. Fill intake, submit, expect assigned ID + interview section ---
+// --- 2. Fill intake, submit, expect assigned ID + the Demo section ---
 await page.fill('#in-name', 'Jane Doe');
 await page.fill('#in-years-slider', '8');
 await page.dispatchEvent('#in-years-slider', 'input');
@@ -108,19 +114,46 @@ await page.click('#platform-chips .chip:has-text("Flutter")');
 await page.fill('#in-role', 'Senior Mobile Engineer');
 assert((await page.textContent('#in-years-readout')).includes('8 years'), 'years slider readout updates live');
 await page.click('#btn-intake-submit');
-await page.waitForSelector('#section-interview.active');
+await page.waitForSelector('#section-demo.active');
 await page.waitForTimeout(350);
-assert((await page.textContent('#id-badge-1')).trim() === 'SME-1', 'assigned ID SME-1 shown after intake');
-await shot('real-2-interview.png');
+assert((await page.textContent('#id-badge-demo')).trim() === 'SME-1', 'assigned ID SME-1 shown after intake, on the Demo section');
+await shot('real-2-demo.png');
 
-// --- 2b. Resume: reload right after intake, before any interview draft ---
+// --- 2b. Back-button chain: Demo -> Intake -> (Continue again) -> Demo,
+// without minting a second participant ID. assignId is NOT idempotent
+// (unlike saveInterview's upsert), so re-clicking Continue on Intake after
+// going back must navigate forward without re-calling the backend. ---
+await page.click('#btn-demo-back');
+await page.waitForSelector('#section-intake.active');
+assert((await page.inputValue('#in-role')) === 'Senior Mobile Engineer', 'going back to Intake keeps the previously entered values (DOM untouched, not re-rendered)');
+await page.click('#btn-intake-submit');
+await page.waitForSelector('#section-demo.active');
+assert((await page.textContent('#id-badge-demo')).trim() === 'SME-1', 'still SME-1 after going back and forward again — no duplicate participant created');
+assert(assignIdCallCount === 1, 'assign_id was only actually POSTed once, despite Continue being clicked twice');
+
+// --- 2c. Resume: reload right on the Demo section ---
 await page.reload();
 await page.waitForTimeout(250);
 assert(await page.locator('#resume-banner:not(.hidden)').count() === 1, 'resume banner shows after reload once a participant ID exists');
 assert((await page.textContent('#resume-banner-text')).includes('SME-1'), 'resume banner names the correct participant ID');
+assert(await page.locator('#section-demo.active').count() === 1, 'reload resumes directly on the Demo section');
+
+// --- 2d. Continue to Interview, then test its Back button too ---
+await page.click('#btn-demo-continue');
+await page.waitForSelector('#section-interview.active');
+await page.waitForTimeout(350);
+await shot('real-2b-interview.png');
+await page.click('#btn-interview-back');
+await page.waitForSelector('#section-demo.active');
+await page.click('#btn-demo-continue');
+await page.waitForSelector('#section-interview.active');
+
+// --- 2e. Resume: reload right after reaching interview, before any draft ---
+await page.reload();
+await page.waitForTimeout(250);
 assert(await page.locator('#section-interview.active').count() === 1, 'reload resumes directly on the interview section');
 
-// --- 2c. Resume: type a partial interview draft, reload, expect it restored ---
+// --- 2f. Resume: type a partial interview draft, reload, expect it restored ---
 await page.fill('#q2', 'Used GitHub Copilot before.');
 await page.waitForTimeout(600); // let the 400ms debounced autosave fire
 assert(await page.locator('#interview-draft-status:not(.hidden)').count() === 1, '"Draft saved" indicator shows after the debounced autosave');

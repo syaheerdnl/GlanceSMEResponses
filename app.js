@@ -139,7 +139,7 @@
     'Readability': '#6E63A6'
   };
 
-  var STEP_ORDER = ['intake', 'interview', 'cve', 'sus', 'done'];
+  var STEP_ORDER = ['intake', 'demo', 'interview', 'cve', 'sus', 'done'];
 
   // ---- State (live, in-memory) ----
 
@@ -269,7 +269,7 @@
   }
 
   function setBadges(id) {
-    ['id-badge-1', 'id-badge-2', 'id-badge-3'].forEach(function (b) {
+    ['id-badge-demo', 'id-badge-1', 'id-badge-2', 'id-badge-3'].forEach(function (b) {
       var el = $(b);
       if (el) el.textContent = id;
     });
@@ -427,6 +427,17 @@
     $('btn-intake-submit').addEventListener('click', function () {
       clearError('intake-error');
 
+      // A participant ID is only ever assigned once. Reaching Intake again
+      // via the Back button (from Demo) must not re-call assignId — unlike
+      // saveInterview, assignId always inserts a fresh row, so calling it
+      // twice would mint a second SME-N for the same person. Just move on.
+      if (state.participantId) {
+        session.section = 'demo';
+        saveSession();
+        showSection('section-demo');
+        return;
+      }
+
       var years = cap.checked ? '20+ years' : (Number(slider.value) === 0 ? 'less than 1 year' : slider.value + ' years');
 
       var selectedChips = Array.prototype.slice
@@ -454,9 +465,9 @@
           state.participantId = data.id;
           setBadges(data.id);
           session.participantId = data.id;
-          session.section = 'interview';
+          session.section = 'demo';
           saveSession();
-          showSection('section-interview');
+          showSection('section-demo');
         })
         .catch(function (err) {
           showError('intake-error', 'Could not save your details: ' + err.message);
@@ -465,6 +476,24 @@
           btn.disabled = false;
           btn.textContent = 'Continue';
         });
+    });
+  }
+
+  // ---- Section Demo: Application Demonstration ----
+  // No backend call here — this is purely a navigation waypoint between
+  // Intake and Interview, so Back/Continue are plain section swaps.
+
+  function initDemo() {
+    $('btn-demo-back').addEventListener('click', function () {
+      session.section = 'intake';
+      saveSession();
+      showSection('section-intake');
+    });
+
+    $('btn-demo-continue').addEventListener('click', function () {
+      session.section = 'interview';
+      saveSession();
+      showSection('section-interview');
     });
   }
 
@@ -483,6 +512,12 @@
   function initInterview() {
     document.querySelectorAll('#section-interview textarea.autogrow').forEach(function (t) {
       t.addEventListener('input', function () { autoGrow(t); });
+    });
+
+    $('btn-interview-back').addEventListener('click', function () {
+      session.section = 'demo';
+      saveSession();
+      showSection('section-demo');
     });
 
     ['q2', 'q3', 'q4', 'q5', 'q6'].forEach(function (id) {
@@ -950,6 +985,7 @@
     }
 
     initIntake();
+    initDemo();
     initInterview();
     initCVE();
     initSUS();
@@ -957,7 +993,7 @@
     var startOverBtn = $('btn-start-over');
     if (startOverBtn) {
       startOverBtn.addEventListener('click', function () {
-        if (!window.confirm('Start over? This clears your saved progress on this device — nothing already submitted is removed from the Sheet.')) return;
+        if (!window.confirm('Start over? This clears your saved progress on this device — nothing already submitted is removed from the database.')) return;
         clearSession();
         window.location.reload();
       });
@@ -970,7 +1006,9 @@
       setBadges(session.participantId);
       showResumeBanner(session.participantId);
 
-      if (session.section === 'interview') {
+      if (session.section === 'demo') {
+        showSection('section-demo');
+      } else if (session.section === 'interview') {
         showSection('section-interview');
         restoreInterviewDraft();
       } else if (session.section === 'cve') {
