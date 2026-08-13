@@ -923,12 +923,14 @@
     container.innerHTML = '';
     SUS_ITEMS.forEach(function (text, i) {
       var wrap = document.createElement('div');
+      wrap.className = 'sus-item';
       var label = document.createElement('label');
+      label.className = 'sus-statement';
       label.textContent = 'SUS' + (i + 1) + '. ' + text;
       wrap.appendChild(label);
 
       var row = document.createElement('div');
-      row.className = 'likert-row';
+      row.className = 'likert-row sus-likert';
       ['1', '2', '3', '4', '5'].forEach(function (v, vi) {
         var text2 = v;
         if (vi === 0) text2 = '1 (Strongly Disagree)';

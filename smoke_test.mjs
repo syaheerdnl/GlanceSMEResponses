@@ -273,6 +273,8 @@ await page.click('#btn-to-sus');
 await page.waitForSelector('#section-sus.active');
 await page.waitForTimeout(350);
 assert((await page.locator('#sus-items > div').count()) === 10, 'all 10 SUS items rendered');
+assert((await page.locator('#sus-items > .sus-item').count()) === 10, 'SUS items use the structured response grid');
+assert((await page.locator('#sus-items .sus-likert .radio-option').count()) === 50, 'SUS grid keeps all 50 selectable tap targets');
 await shot('real-5-sus.png');
 
 // --- 6b. Resume: answer a few SUS items, reload, expect them restored ---
