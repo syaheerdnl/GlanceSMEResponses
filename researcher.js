@@ -97,13 +97,15 @@
   }
 
   function requestPasswordSetupLink() {
-    return request(SUPABASE_URL + '/auth/v1/otp', {
+    // GoTrue reads this as a query parameter. Sending it in the JSON body
+    // makes Supabase fall back to the configured Site URL instead.
+    var endpoint = SUPABASE_URL + '/auth/v1/otp?redirect_to=' + encodeURIComponent(researcherUrl());
+    return request(endpoint, {
       method: 'POST',
       headers: apiHeaders(),
       body: JSON.stringify({
         email: RESEARCHER_EMAIL,
-        create_user: false,
-        redirect_to: researcherUrl()
+        create_user: false
       })
     });
   }

@@ -121,10 +121,11 @@ await page.route('**/auth/v1/*', async (route) => {
   }
   if (pathName.endsWith('/otp')) {
     const body = JSON.parse(req.postData());
+    const otpUrl = new URL(req.url());
     passwordSetupLinkCallCount++;
     assert(body.email === 'muhammadsyaheerdaniel@gmail.com', 'one-time setup link is limited to the approved researcher email');
     assert(body.create_user === false, 'one-time setup does not create an additional Auth user');
-    assert(body.redirect_to === 'https://syaheerdnl.github.io/GlanceSMEResponses/researcher.html', 'one-time setup link always returns to the authorised live dashboard page');
+    assert(otpUrl.searchParams.get('redirect_to') === 'https://syaheerdnl.github.io/GlanceSMEResponses/researcher.html', 'one-time setup link sends the authorised live dashboard page through GoTrue\'s required redirect query parameter');
     await route.fulfill({ contentType: 'application/json', body: '{}' });
     return;
   }
