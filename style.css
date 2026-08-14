@@ -1284,6 +1284,7 @@ label {
 .help { color: #505a5f; font-size: 1rem; line-height: 1.45; }
 
 input[type="text"],
+input[type="password"],
 textarea,
 select {
   border: 2px solid #0b0c0c;
@@ -1293,6 +1294,7 @@ select {
 }
 
 input[type="text"]:focus,
+input[type="password"]:focus,
 textarea:focus,
 select:focus {
   outline: 3px solid #ffdd00;
@@ -1574,6 +1576,11 @@ footer {
 .researcher-shell { max-width: 1080px; margin: 0 auto; }
 .researcher-card { max-width: 680px; }
 .researcher-dashboard { max-width: 1080px; margin: 0 auto; }
+.researcher-setup-help { margin-top: 20px; }
+.link-button { background: transparent; border: 0; color: #1d70b8; cursor: pointer; font: inherit; margin: 0; padding: 0; text-decoration: underline; }
+.link-button:hover, .link-button:focus { background: #ffdd00; color: #0b0c0c; outline: 0; }
+.researcher-password-panel { max-width: 680px; }
+.researcher-password-panel .status, .researcher-password-panel .error { margin-top: 20px; }
 
 .researcher-toolbar,
 .researcher-filter-row,

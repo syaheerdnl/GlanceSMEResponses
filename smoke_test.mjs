@@ -90,7 +90,9 @@ var saveConsentCallCount = 0;
 var lastConsentPayload = null;
 var susPayloads = [];
 var handsOnMilestoneCallCount = {}; // milestone -> count; the task RPC must be idempotent client-side too
-var magicLinkCallCount = 0;
+var passwordSignInCallCount = 0;
+var passwordSetupLinkCallCount = 0;
+var passwordUpdateCallCount = 0;
 var researcherDashboardCallCount = 0;
 var researcherSignoutCallCount = 0;
 
@@ -103,16 +105,33 @@ await page.route('**/config.js', route => route.fulfill({ contentType: 'applicat
 await page.route('**/auth/v1/*', async (route) => {
   const req = route.request();
   const pathName = new URL(req.url()).pathname;
+  if (pathName.endsWith('/token')) {
+    const body = JSON.parse(req.postData());
+    passwordSignInCallCount++;
+    assert(new URL(req.url()).searchParams.get('grant_type') === 'password', 'researcher login uses Supabase password authentication');
+    assert(body.email === 'muhammadsyaheerdaniel@gmail.com', 'password sign-in is limited to the approved researcher email');
+    assert(body.password === 'researcher-test-password', 'researcher password is submitted only to Supabase Auth');
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ access_token: 'researcher-access-token' }) });
+    return;
+  }
   if (pathName.endsWith('/otp')) {
     const body = JSON.parse(req.postData());
-    magicLinkCallCount++;
-    assert(body.email === 'muhammadsyaheerdaniel@gmail.com', 'researcher magic link is sent only to the approved email');
-    assert(body.create_user === true, 'first magic-link sign-in can create the approved Auth account');
-    assert(body.redirect_to === 'https://syaheerdnl.github.io/GlanceSMEResponses/researcher.html', 'researcher magic link always returns to the authorised live dashboard page');
+    passwordSetupLinkCallCount++;
+    assert(body.email === 'muhammadsyaheerdaniel@gmail.com', 'one-time setup link is limited to the approved researcher email');
+    assert(body.create_user === false, 'one-time setup does not create an additional Auth user');
+    assert(body.redirect_to === 'https://syaheerdnl.github.io/GlanceSMEResponses/researcher.html', 'one-time setup link always returns to the authorised live dashboard page');
     await route.fulfill({ contentType: 'application/json', body: '{}' });
     return;
   }
   if (pathName.endsWith('/user')) {
+    if (req.method() === 'PUT') {
+      const body = JSON.parse(req.postData());
+      passwordUpdateCallCount++;
+      assert(req.headers().authorization === 'Bearer researcher-access-token', 'password update requires the authenticated researcher session');
+      assert(body.password === 'researcher-new-password', 'new password is sent only to Supabase Auth');
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ email: 'muhammadsyaheerdaniel@gmail.com' }) });
+      return;
+    }
     const authorized = req.headers().authorization === 'Bearer researcher-access-token';
     await route.fulfill({
       status: authorized ? 200 : 401,
@@ -586,19 +605,17 @@ await page.click('#btn-sus-submit');
 await page.waitForSelector('#section-done.active');
 assert(susPayloads.length === 2 && susPayloads[1].p_feedback_difficulty === '' && susPayloads[1].p_feedback_improvement === '', 'SUS-only route can submit the same scale with optional feedback left blank');
 
-// --- 9. Researcher dashboard: public URL alone exposes no records. It first
-// requests a magic link only for the approved email, then the server-side RPC
-// receives the signed session token. The dashboard itself has no browser PIN.
+// --- 9. Researcher dashboard: public URL alone exposes no records. Password
+// sign-in obtains a Supabase session token, then the server-side RPC receives
+// that token. The dashboard itself has no browser PIN.
 await page.goto(fileUrl + 'researcher.html');
 await page.waitForSelector('#researcher-login:not(.hidden)');
-assert(await page.locator('#researcher-dashboard.hidden').count() === 1, 'researcher dashboard is hidden before email authentication');
+assert(await page.locator('#researcher-dashboard.hidden').count() === 1, 'researcher dashboard is hidden before password authentication');
+await page.fill('#researcher-password', 'researcher-test-password');
 await page.click('#btn-researcher-login');
-await page.waitForSelector('#researcher-login-status:not(.hidden)');
-assert(magicLinkCallCount === 1, 'researcher login sends exactly one email magic-link request');
-assert(await page.locator('#researcher-login-status:not(.hidden)').count() === 1, 'researcher login confirms that the email link was sent');
-
-await page.goto(fileUrl + 'researcher.html?magic-link=1#access_token=researcher-access-token&token_type=bearer');
 await page.waitForSelector('#researcher-dashboard:not(.hidden)');
+assert(passwordSignInCallCount === 1, 'researcher login sends exactly one password sign-in request');
+assert(await page.locator('#researcher-password-panel.hidden').count() === 1, 'routine password sign-in does not show the one-time setup panel');
 assert(researcherDashboardCallCount === 1, 'researcher dashboard RPC runs only after the authenticated session is verified');
 assert((await page.textContent('#metric-participants')).trim() === '2', 'researcher dashboard calculates completed SUS participants from protected data');
 assert((await page.textContent('#metric-sus')).trim() === '87.5', 'researcher dashboard calculates the mean SUS score');
@@ -606,7 +623,7 @@ assert((await page.textContent('#researcher-cve-overall')).includes('50%'), 'res
 assert(await page.locator('#researcher-participant-rows tr').count() === 2, 'researcher dashboard shows anonymous participant overview rows');
 assert((await page.textContent('#researcher-participant-rows')).includes('Aisha Rahman') && (await page.textContent('#researcher-participant-rows')).includes('Farid Omar'), 'researcher dashboard alone shows the separately protected participant names');
 assert(!(await page.textContent('#researcher-participant-rows')).includes('clearer line highlighting'), 'free-text feedback is excluded from the participant overview table');
-assert(!page.url().includes('researcher-access-token'), 'magic-link access token is removed from the URL after being handled');
+assert(!page.url().includes('researcher-access-token'), 'researcher access token is never placed in the URL');
 const susDownloadPromise = page.waitForEvent('download');
 await page.click('#btn-export-sus');
 const susDownload = await susDownloadPromise;
@@ -621,6 +638,18 @@ assert(await page.locator('#researcher-participant-rows tr').count() === 1, 'res
 await page.click('#btn-researcher-signout');
 await page.waitForSelector('#researcher-login:not(.hidden)');
 assert(researcherSignoutCallCount === 1, 'researcher sign-out clears the local token and revokes the server session');
+
+await page.click('#btn-researcher-setup');
+await page.waitForSelector('#researcher-login-status:not(.hidden)');
+assert(passwordSetupLinkCallCount === 1, 'first-time setup sends only one email link');
+await page.goto(fileUrl + 'researcher.html?setup=1#access_token=researcher-access-token&token_type=bearer');
+await page.waitForSelector('#researcher-dashboard:not(.hidden)');
+assert(researcherDashboardCallCount === 2, 'one-time setup link still requires an authenticated Supabase session');
+assert(await page.locator('#researcher-password-panel:not(.hidden)').count() === 1, 'one-time setup link reveals the password setup panel');
+await page.fill('#researcher-new-password', 'researcher-new-password');
+await page.click('#btn-researcher-password');
+await page.waitForSelector('#researcher-password-status:not(.hidden)');
+assert(passwordUpdateCallCount === 1, 'authenticated researcher can save a password for future password-only access');
 
 console.log('errors observed:', errors);
 assert(errors.length === 0, 'no console/page errors during the whole flow');

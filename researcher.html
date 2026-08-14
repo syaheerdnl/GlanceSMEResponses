@@ -18,11 +18,16 @@
     <div id="researcher-login" class="card researcher-card">
       <p class="pill">Private researcher area</p>
       <h2 id="researcher-title">Study results</h2>
-      <p>This page provides the study dashboard and CSV exports. It is available only after an emailed sign-in link confirms the approved researcher account.</p>
+      <p>This page provides the study dashboard and CSV exports. It is available only to the approved researcher account.</p>
       <div id="researcher-login-status" class="status hidden" role="status"></div>
       <div id="researcher-login-error" class="error hidden" role="alert"></div>
-      <button id="btn-researcher-login">Email me a sign-in link</button>
-      <p class="help">The link expires automatically. No participant can use this page to read study data.</p>
+      <form id="researcher-login-form">
+        <label for="researcher-password">Researcher password</label>
+        <input id="researcher-password" type="password" autocomplete="current-password" required>
+        <button id="btn-researcher-login" type="submit">Sign in to results</button>
+      </form>
+      <p class="help">This page never stores the password. No participant can use this page to read study data.</p>
+      <p class="help researcher-setup-help">First-time setup only: <button id="btn-researcher-setup" class="link-button" type="button">email me a one-time setup link</button>, then set a password inside the protected dashboard.</p>
       <p><a href="index.html">Return to the study</a></p>
     </div>
 
@@ -91,6 +96,22 @@
         </div>
       </section>
 
+      <section id="researcher-password-panel" class="researcher-panel researcher-password-panel hidden">
+        <div class="researcher-panel-heading">
+          <div>
+            <h3>Researcher sign-in password</h3>
+            <p class="help">Set this password for future researcher sign-ins. It is sent only to Supabase Auth and is never stored by this website.</p>
+          </div>
+        </div>
+        <form id="researcher-password-form">
+          <label for="researcher-new-password">New password</label>
+          <input id="researcher-new-password" type="password" autocomplete="new-password" minlength="12" required>
+          <button type="submit" id="btn-researcher-password">Save password</button>
+        </form>
+        <div id="researcher-password-status" class="status hidden" role="status"></div>
+        <div id="researcher-password-error" class="error hidden" role="alert"></div>
+      </section>
+
       <section class="researcher-panel researcher-participant-panel">
         <div class="researcher-panel-heading">
           <div>
@@ -113,6 +134,6 @@
 <footer>Private researcher dashboard &middot; participant records are never exposed through the public study flow.</footer>
 
 <script src="config.js"></script>
-<script src="researcher.js?v=20260813-auth-redirect"></script>
+<script src="researcher.js?v=20260814-password-login-setup"></script>
 </body>
 </html>

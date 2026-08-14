@@ -71,14 +71,12 @@ if you'd rather begin fresh.
 
 ## Part 3 — Enable private researcher results
 
-The public study footer links to `researcher.html`, but knowing that URL does not reveal any data. The page sends a magic sign-in link only to the email allowlisted in `supabase/007_add_shared_background_and_identity.sql`; the database independently verifies the signed email claim before returning records.
+The public study footer links to `researcher.html`, but knowing that URL does not reveal any data. The page signs in only the email allowlisted in `supabase/007_add_shared_background_and_identity.sql` with a researcher-controlled password; the database independently verifies the signed email claim before returning records.
 
 1. Run the current `supabase/007_add_shared_background_and_identity.sql` in the Supabase SQL Editor after migrations 003, 004, and 005. It includes the dashboard allowlist and protected dashboard function; it also supersedes the dashboard function from migration 006. If the old 007 is already in your database, run `008_make_sus_background_route_specific.sql` next.
-2. In **Authentication > URL Configuration**, set the Site URL to `https://syaheerdnl.github.io/GlanceSMEResponses/` and add `https://syaheerdnl.github.io/GlanceSMEResponses/researcher.html` as a Redirect URL.
-3. In **Authentication > Providers**, ensure the Email provider is enabled. Its default magic-link template must keep the `{{ .ConfirmationURL }}` link.
-4. Open the live study page, select **Researcher results** in the footer, and select **Email me a sign-in link**. Open the received email on the approved account. The dashboard then provides the combined participant overview and route-filtered CSV exports.
-
-The dashboard explicitly uses that GitHub Pages researcher URL as its magic-link return address. This means a researcher testing a local `file://` copy is still returned to the authorised live dashboard after email verification.
+2. In **Authentication > Providers**, ensure the Email provider is enabled for password sign-in.
+3. Open the live study page and select **Researcher results**. If this is the first password setup, choose **email me a one-time setup link**, open it in the same browser, then use the protected dashboard’s **Researcher sign-in password** panel to set a strong 12-character-or-longer password. Do not put it in source code or share it with participants.
+4. For all future access, enter that password and select **Sign in to results**. The dashboard then provides the combined participant overview and route-filtered CSV exports without sending another email.
 
 Do not replace this with a browser PIN. A browser PIN can be read from public JavaScript, while the dashboard here is protected by a Supabase Auth session and a server-side email allowlist.
 

@@ -1,7 +1,7 @@
 /* Researcher-only dashboard for the SME study.
  *
- * This is deliberately not protected by a browser PIN. The email magic link
- * gives Supabase an authenticated JWT, and researcher_dashboard() checks that
+ * This is deliberately not protected by a browser PIN. Password sign-in gives
+ * Supabase an authenticated JWT, and researcher_dashboard() checks that
  * JWT against the server-side allowlist before returning any study data.
  */
 (function () {
@@ -9,9 +9,6 @@
 
   var RESEARCHER_EMAIL = 'muhammadsyaheerdaniel@gmail.com';
   var SESSION_KEY = 'smeResearcherAccessToken_v1';
-  // A magic link may be requested while this static site is opened locally
-  // (file://) during researcher setup. Supabase cannot redirect back to a
-  // local file, so always use the authorised GitHub Pages callback instead.
   var DEPLOYED_RESEARCHER_URL = 'https://syaheerdnl.github.io/GlanceSMEResponses/researcher.html';
   var results = null;
 
@@ -56,6 +53,9 @@
     try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
   }
 
+  // A one-time setup link still yields a normal authenticated session. It is
+  // retained only so the approved researcher can set the first password;
+  // routine access uses signInWithPassword below.
   function absorbMagicLinkToken() {
     var hash = new URLSearchParams(window.location.hash.slice(1));
     var token = hash.get('access_token');
@@ -82,15 +82,37 @@
     return headers;
   }
 
-  function requestMagicLink() {
+  function signInWithPassword(password) {
+    return request(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({
+        email: RESEARCHER_EMAIL,
+        password: password
+      })
+    }).then(function (session) {
+      if (!session.access_token) throw new Error('Password sign-in did not return a session.');
+      return session.access_token;
+    });
+  }
+
+  function requestPasswordSetupLink() {
     return request(SUPABASE_URL + '/auth/v1/otp', {
       method: 'POST',
       headers: apiHeaders(),
       body: JSON.stringify({
         email: RESEARCHER_EMAIL,
-        create_user: true,
+        create_user: false,
         redirect_to: researcherUrl()
       })
+    });
+  }
+
+  function updatePassword(token, password) {
+    return request(SUPABASE_URL + '/auth/v1/user', {
+      method: 'PUT',
+      headers: apiHeaders(token),
+      body: JSON.stringify({ password: password })
     });
   }
 
@@ -289,6 +311,7 @@
     results = data;
     $('researcher-login').classList.add('hidden');
     $('researcher-dashboard').classList.remove('hidden');
+    $('researcher-password-panel').classList.toggle('hidden', new URLSearchParams(window.location.search).get('setup') !== '1');
     $('researcher-generated-at').textContent = 'Loaded ' + dateText(data.generatedAt) + '. Data stays in Supabase until you export it.';
     renderDashboard();
   }
@@ -301,17 +324,82 @@
     }
 
     absorbMagicLinkToken();
-    $('btn-researcher-login').addEventListener('click', function () {
+    $('researcher-login-form').addEventListener('submit', function (event) {
+      event.preventDefault();
       hide('researcher-login-error');
+      hide('researcher-login-status');
+      var password = $('researcher-password').value;
+      if (!password) {
+        show('researcher-login-error', 'Enter the researcher password.');
+        return;
+      }
       var button = $('btn-researcher-login');
       button.disabled = true;
-      button.textContent = 'Sending sign-in link...';
-      requestMagicLink()
-        .then(function () { show('researcher-login-status', 'A sign-in link has been sent to the approved researcher email. Open it in this browser to view the dashboard.'); })
-        .catch(function (error) { show('researcher-login-error', 'Could not send the sign-in link: ' + error.message); })
+      button.textContent = 'Signing in...';
+      signInWithPassword(password)
+        .then(function (token) {
+          setToken(token);
+          return loadAuthenticatedResults(token);
+        })
+        .then(showDashboard)
+        .catch(function (error) {
+          clearToken();
+          show('researcher-login-error', 'Could not sign in: ' + error.message);
+        })
+        .finally(function () {
+          $('researcher-password').value = '';
+          button.disabled = false;
+          button.textContent = 'Sign in to results';
+        });
+    });
+
+    $('btn-researcher-setup').addEventListener('click', function () {
+      hide('researcher-login-error');
+      hide('researcher-login-status');
+      var button = $('btn-researcher-setup');
+      button.disabled = true;
+      button.textContent = 'Sending setup link...';
+      requestPasswordSetupLink()
+        .then(function () {
+          show('researcher-login-status', 'A one-time setup link has been sent. Open it in this browser, then set your researcher password in the dashboard.');
+        })
+        .catch(function (error) {
+          show('researcher-login-error', 'Could not send the setup link: ' + error.message);
+        })
         .finally(function () {
           button.disabled = false;
-          button.textContent = 'Email me a sign-in link';
+          button.textContent = 'email me a one-time setup link';
+        });
+    });
+
+    $('researcher-password-form').addEventListener('submit', function (event) {
+      event.preventDefault();
+      hide('researcher-password-error');
+      hide('researcher-password-status');
+      var password = $('researcher-new-password').value;
+      var token = getToken();
+      if (!token) {
+        show('researcher-password-error', 'Sign in before changing the password.');
+        return;
+      }
+      if (password.length < 12) {
+        show('researcher-password-error', 'Use at least 12 characters for the researcher password.');
+        return;
+      }
+      var button = $('btn-researcher-password');
+      button.disabled = true;
+      button.textContent = 'Saving password...';
+      updatePassword(token, password)
+        .then(function () {
+          $('researcher-new-password').value = '';
+          show('researcher-password-status', 'Password saved. Use it for future researcher sign-ins; no email link is needed.');
+        })
+        .catch(function (error) {
+          show('researcher-password-error', 'Could not save the password: ' + error.message);
+        })
+        .finally(function () {
+          button.disabled = false;
+          button.textContent = 'Save password';
         });
     });
 
