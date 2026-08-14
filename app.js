@@ -21,11 +21,11 @@
 
   var FINDINGS_PUBLIC = [
     { num: 1, line: 5,  title: 'Hardcoded Production API Key' },
-    { num: 2, line: 28, title: 'Incorrect Refund Calculation Logic' },
+    { num: 2, line: 28, endLine: 29, title: 'Incorrect Refund Calculation Logic' },
     { num: 3, line: 40, title: 'Empty Catch Block Suppresses Failures' },
-    { num: 4, line: 17, title: 'Sequential Await in Loop' },
-    { num: 5, line: 44, title: 'Inefficient Duplicate Reference Check' },
-    { num: 6, line: 51, title: 'Imperative String Joining' }
+    { num: 4, line: 17, endLine: 22, title: 'Sequential Await in Loop' },
+    { num: 5, line: 44, endLine: 49, title: 'Inefficient Duplicate Reference Check' },
+    { num: 6, line: 51, endLine: 59, title: 'Imperative String Joining' }
   ];
 
   var SUS_ITEMS = [
@@ -377,9 +377,14 @@
 
   function findingByLine(lineNum) {
     for (var i = 0; i < FINDINGS_PUBLIC.length; i++) {
-      if (FINDINGS_PUBLIC[i].line === lineNum) return FINDINGS_PUBLIC[i];
+      var finding = FINDINGS_PUBLIC[i];
+      if (lineNum >= finding.line && lineNum <= (finding.endLine || finding.line)) return finding;
     }
     return null;
+  }
+
+  function findingLineLabel(finding) {
+    return finding.endLine ? 'Lines ' + finding.line + '–' + finding.endLine : 'Line ' + finding.line;
   }
 
   // ---- Backend calls ----
@@ -839,13 +844,14 @@
   // went to the server. Findings not yet reached stay plain code, same as
   // the app's behavior before this change.
 
-  function renderCodeListing(currentLineNum) {
+  function renderCodeListing(currentFinding) {
     var html = CODE_LINES.map(function (text, i) {
       var lineNum = i + 1;
       var numStr = (lineNum < 10 ? ' ' : '') + lineNum;
       var srcHtml = '<span class="src">' + (escapeHtml(text) || ' ') + '</span>';
       var finding = findingByLine(lineNum);
       var revealedCat = finding ? state.revealedFindings[finding.num] : null;
+      var isCurrentFinding = finding && currentFinding && finding.num === currentFinding.num;
 
       if (revealedCat) {
         var color = CATEGORY_COLORS[revealedCat];
@@ -853,7 +859,7 @@
           '<span class="ln">' + numStr + '</span>' + srcHtml +
           '<span class="mark" style="color:' + color + '">●</span></div>';
       }
-      if (lineNum === currentLineNum) {
+      if (isCurrentFinding) {
         return '<div class="code-line current" data-line="' + lineNum + '"><span class="ln">' + numStr + '</span>' + srcHtml + '</div>';
       }
       return '<div class="code-line" data-line="' + lineNum + '"><span class="ln">' + numStr + '</span>' + srcHtml + '</div>';
@@ -890,7 +896,7 @@
     state.couldAlsoBeOrder = [];
 
     renderMiniProgress();
-    renderCodeListing(finding.line);
+    renderCodeListing(finding);
     scrollToCurrentLine(finding.line);
 
     $('cve-finding-card').classList.remove('hidden');
@@ -900,7 +906,7 @@
     // Title and line are safe to show before the guess — only the category is
     // gated (see the "blind-reveal boundary" note in CLAUDE.md).
     $('cve-finding-heading').textContent = finding.title;
-    $('cve-finding-meta').textContent = 'Line ' + finding.line;
+    $('cve-finding-meta').textContent = findingLineLabel(finding);
     var dot = $('finding-dot');
     dot.classList.remove('revealed');
     dot.style.background = 'transparent';
@@ -1110,7 +1116,7 @@
     var finding = FINDINGS_PUBLIC[state.findingIndex];
     state.revealedFindings[finding.num] = data.category;
     state.revealedCategory = data.category;
-    renderCodeListing(finding.line);
+    renderCodeListing(finding);
     scrollToCurrentLine(finding.line);
 
     var color = CATEGORY_COLORS[data.category];
@@ -1118,7 +1124,7 @@
     dot.classList.add('revealed');
     dot.style.background = color;
     dot.style.borderColor = color;
-    $('cve-finding-meta').textContent = data.category + ' · Line ' + data.line;
+    $('cve-finding-meta').textContent = data.category + ' · ' + findingLineLabel(finding);
     $('cve-finding-line').textContent = 'Your guess has been recorded — see the application’s answer below.';
 
     var box = $('reveal-box');

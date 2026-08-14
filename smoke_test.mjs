@@ -54,6 +54,11 @@ const FINDINGS = {
   6: { line: 51, title: 'Imperative String Joining',              category: 'Readability',    explanation: 'The loop manually tracks the index to decide when to add a separator.' }
 };
 
+// Exact highlighted spans from the reviewed JomPAYAlpha.dart record in the
+// real Glance app. The website may expose these ranges before a guess, but
+// never the category assigned to a particular finding.
+const FINDING_LINE_COUNTS = { 1: 1, 2: 2, 3: 1, 4: 6, 5: 6, 6: 9 };
+
 const RESEARCHER_DASHBOARD = {
   generatedAt: '2026-08-13T12:00:00.000Z',
   participants: [
@@ -447,6 +452,11 @@ for (let i = 0; i < 6; i++) {
   await page.waitForTimeout(150);
   if (i < 5) {
     await page.waitForSelector('#cve-finding-card:not(.hidden)');
+    const nextFinding = i + 2;
+    assert(
+      await page.locator('#code-listing .code-line.current').count() === FINDING_LINE_COUNTS[nextFinding],
+      'finding ' + nextFinding + ' marks its full Glance line range before any category is revealed'
+    );
     // pick a guess for the next finding
     await page.click('#guess-options .radio-option >> nth=1');
     await page.click('#btn-submit-guess');
@@ -455,7 +465,7 @@ for (let i = 0; i < 6; i++) {
 }
 await page.waitForSelector('#cve-done:not(.hidden)');
 assert(true, 'all 6 findings walked through, cve-done shown');
-assert(await page.locator('#code-listing .code-line.flagged').count() === 6, 'all 6 findings now show their revealed category color in the code panel');
+assert(await page.locator('#code-listing .code-line.flagged').count() === 25, 'all 6 findings now show their full revealed Glance line ranges in the code panel');
 for (let n = 1; n <= 6; n++) {
   assert(submitGuessCallCount[n] === 1, 'finding ' + n + ' got exactly one submitGuess POST across the whole run');
 }
