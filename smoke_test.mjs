@@ -622,6 +622,7 @@ assert(susPayloads.length === 2 && susPayloads[1].p_feedback_difficulty === '' &
 // that token. The dashboard itself has no browser PIN.
 await page.goto(fileUrl + 'researcher.html');
 await page.waitForSelector('#researcher-login:not(.hidden)');
+assert((await page.locator('link[href="style.css?v=20260814-pie-charts"]').count()) === 1, 'researcher page cache-busts the stylesheet that lays out its pie charts');
 assert(await page.locator('#researcher-dashboard.hidden').count() === 1, 'researcher dashboard is hidden before password authentication');
 await page.fill('#researcher-password', 'researcher-test-password');
 await page.click('#btn-researcher-login');
