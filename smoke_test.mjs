@@ -638,6 +638,8 @@ assert(!(await page.textContent('#researcher-participant-rows')).includes('clear
 assert(!page.url().includes('researcher-access-token'), 'researcher access token is never placed in the URL');
 assert(await page.locator('.researcher-chart-card').count() === 4, 'researcher dashboard provides four aggregate visual-summary charts');
 assert((await page.textContent('#chart-sus-distribution')).includes('68 to 79') && (await page.textContent('#chart-sus-distribution')).includes('80 to 100'), 'SUS chart groups completed scores into readable score bands');
+assert(await page.locator('#chart-sus-distribution .researcher-donut').count() === 1, 'SUS score-band distribution is rendered as an actual pie-style donut chart');
+assert(await page.locator('#chart-route-split .researcher-donut').count() === 1, 'study-route distribution is rendered as an actual pie-style donut chart');
 assert((await page.textContent('#chart-hands-on-progress')).includes('2 / 2'), 'hands-on chart reports milestone completion against the selected participant group');
 assert((await page.textContent('#chart-category-match')).includes('100% (1/1)') && (await page.textContent('#chart-category-match')).includes('0% (0/1)'), 'category chart reports blind-match rates without exposing participant identities');
 const summaryDownloadPromise = page.waitForEvent('download');

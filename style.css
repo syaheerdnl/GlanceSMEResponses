@@ -1667,6 +1667,18 @@ footer {
 .researcher-chart-row strong { font-size: 0.78rem; text-align: right; white-space: nowrap; }
 .researcher-chart-empty { color: var(--muted); font-size: 0.84rem; margin: 0; }
 
+.researcher-chart--donut { display: block; }
+.researcher-donut-layout { align-items: center; display: flex; gap: 20px; min-height: 136px; }
+.researcher-donut { align-items: center; border-radius: 50%; display: flex; flex: 0 0 132px; height: 132px; justify-content: center; width: 132px; }
+.researcher-donut-hole { align-items: center; background: #fff; border-radius: 50%; display: flex; flex-direction: column; height: 58px; justify-content: center; width: 58px; }
+.researcher-donut-hole strong { font-family: Georgia, 'Times New Roman', serif; font-size: 1.25rem; line-height: 1; }
+.researcher-donut-hole small { color: var(--muted); font-size: 0.6rem; line-height: 1.15; margin-top: 3px; text-align: center; }
+.researcher-donut-legend { display: grid; flex: 1; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.researcher-donut-legend li { align-items: center; display: grid; gap: 7px; grid-template-columns: 10px minmax(0, 1fr) auto; }
+.researcher-donut-key { height: 10px; width: 10px; }
+.researcher-donut-legend span:not(.researcher-donut-key), .researcher-donut-legend strong { font-size: 0.76rem; }
+.researcher-donut-legend strong { text-align: right; white-space: nowrap; }
+
 .researcher-category-bars { display: grid; gap: 13px; }
 
 .researcher-bar-row {
@@ -1711,5 +1723,9 @@ footer {
   .researcher-chart-grid { grid-template-columns: 1fr; }
   .researcher-chart-row { gap: 8px; grid-template-columns: 86px minmax(58px, 1fr) auto; }
   .researcher-chart-label, .researcher-chart-row strong { font-size: 0.72rem; }
+  .researcher-donut-layout { gap: 14px; }
+  .researcher-donut { flex-basis: 112px; height: 112px; width: 112px; }
+  .researcher-donut-legend li { gap: 6px; grid-template-columns: 9px minmax(0, 1fr) auto; }
+  .researcher-donut-legend span:not(.researcher-donut-key), .researcher-donut-legend strong { font-size: 0.7rem; }
   .researcher-bar-row { gap: 8px; grid-template-columns: 112px 1fr 38px; }
 }

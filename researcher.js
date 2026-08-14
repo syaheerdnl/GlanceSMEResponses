@@ -239,14 +239,14 @@
       completedSUS: completedSUS.length,
       meanSUS: mean,
       susDistribution: [
-        { label: '0 to 49', value: scores.filter(function (score) { return score < 50; }).length },
-        { label: '50 to 67', value: scores.filter(function (score) { return score >= 50 && score < 68; }).length },
-        { label: '68 to 79', value: scores.filter(function (score) { return score >= 68 && score < 80; }).length },
-        { label: '80 to 100', value: scores.filter(function (score) { return score >= 80; }).length }
+        { label: '0 to 49', value: scores.filter(function (score) { return score < 50; }).length, color: '#d4351c' },
+        { label: '50 to 67', value: scores.filter(function (score) { return score >= 50 && score < 68; }).length, color: '#f47738' },
+        { label: '68 to 79', value: scores.filter(function (score) { return score >= 68 && score < 80; }).length, color: '#1d70b8' },
+        { label: '80 to 100', value: scores.filter(function (score) { return score >= 80; }).length, color: '#00703c' }
       ],
       routeSplit: [
-        { label: 'Full SME', value: participants.filter(function (p) { return p.studyPath === 'full_sme'; }).length },
-        { label: 'SUS-only', value: participants.filter(function (p) { return p.studyPath === 'sus_only'; }).length }
+        { label: 'Full SME', value: participants.filter(function (p) { return p.studyPath === 'full_sme'; }).length, color: '#00703c' },
+        { label: 'SUS-only', value: participants.filter(function (p) { return p.studyPath === 'sus_only'; }).length, color: '#1d70b8' }
       ],
       handsOnMilestones: handsOnMilestones,
       categoryMatch: null
@@ -301,14 +301,61 @@
     }).join('; '));
   }
 
+  // Pie/donut charts are used only for mutually exclusive parts of a whole.
+  // SUS bands and the two study routes meet that condition. Task milestones
+  // and category-match rates do not, so bars remain more honest for them.
+  function renderDonutChart(elementId, series, options) {
+    var element = $(elementId);
+    var emptyMessage = (options && options.emptyMessage) || 'No completed records yet.';
+    var color = (options && options.color) || '#00703c';
+    if (!series) {
+      element.innerHTML = '<p class="researcher-chart-empty">' + escapeHtml(emptyMessage) + '</p>';
+      element.setAttribute('aria-label', emptyMessage);
+      return;
+    }
+
+    var total = series.reduce(function (sum, item) { return sum + item.value; }, 0);
+    if (!total) {
+      element.innerHTML = '<p class="researcher-chart-empty">' + escapeHtml(emptyMessage) + '</p>';
+      element.setAttribute('aria-label', emptyMessage);
+      return;
+    }
+
+    var start = 0;
+    var stops = series.filter(function (item) { return item.value > 0; }).map(function (item) {
+      var end = start + (item.value / total) * 100;
+      var stop = (item.color || color) + ' ' + start.toFixed(2) + '% ' + end.toFixed(2) + '%';
+      start = end;
+      return stop;
+    }).join(', ');
+    var legend = series.map(function (item) {
+      var percent = Math.round((item.value / total) * 100);
+      var valueText = options && options.valueText ? options.valueText(item) : String(item.value);
+      return '<li><span class="researcher-donut-key" style="background:' + (item.color || color) + '"></span>' +
+        '<span>' + escapeHtml(item.label) + '</span>' +
+        '<strong>' + escapeHtml(valueText) + ' (' + percent + '%)</strong></li>';
+    }).join('');
+
+    element.classList.add('researcher-chart--donut');
+    element.innerHTML = '<div class="researcher-donut-layout">' +
+      '<div class="researcher-donut" style="background:conic-gradient(' + stops + ')"><span class="researcher-donut-hole"><strong>' + total + '</strong><small>' + escapeHtml((options && options.totalLabel) || 'total') + '</small></span></div>' +
+      '<ul class="researcher-donut-legend">' + legend + '</ul>' +
+    '</div>';
+    element.setAttribute('aria-label', series.map(function (item) {
+      var percent = Math.round((item.value / total) * 100);
+      var valueText = options && options.valueText ? options.valueText(item) : String(item.value);
+      return item.label + ': ' + valueText + ' (' + percent + '%)';
+    }).join('; '));
+  }
+
   function renderStudyCharts(participants, categories) {
     var summary = buildStudySummary(participants, categories);
-    renderChartBars('chart-sus-distribution', summary.susDistribution, {
-      color: '#1d70b8',
+    renderDonutChart('chart-sus-distribution', summary.susDistribution, {
+      totalLabel: 'SUS results',
       valueText: function (item) { return plural(item.value, 'participant'); }
     });
-    renderChartBars('chart-route-split', summary.routeSplit, {
-      color: '#00703c',
+    renderDonutChart('chart-route-split', summary.routeSplit, {
+      totalLabel: 'records',
       valueText: function (item) { return plural(item.value, 'participant'); }
     });
     renderChartBars('chart-hands-on-progress', summary.handsOnMilestones, {
@@ -465,6 +512,62 @@
     });
   }
 
+  function drawExportDonutChart(context, x, y, width, title, series, options) {
+    var height = 230;
+    context.strokeStyle = '#b1b4b6';
+    context.lineWidth = 2;
+    context.strokeRect(x, y, width, height);
+    context.fillStyle = '#0b0c0c';
+    context.font = '700 24px Arial, sans-serif';
+    context.fillText(title, x + 22, y + 35);
+
+    var total = series ? series.reduce(function (sum, item) { return sum + item.value; }, 0) : 0;
+    if (!total) {
+      context.fillStyle = '#505a5f';
+      context.font = '18px Arial, sans-serif';
+      context.fillText(options.emptyMessage || 'No completed records yet.', x + 22, y + 85);
+      return;
+    }
+
+    var centerX = x + 130;
+    var centerY = y + 140;
+    var radius = 62;
+    var angle = -Math.PI / 2;
+    series.forEach(function (item) {
+      if (!item.value) return;
+      var end = angle + (item.value / total) * Math.PI * 2;
+      context.beginPath();
+      context.moveTo(centerX, centerY);
+      context.arc(centerX, centerY, radius, angle, end);
+      context.closePath();
+      context.fillStyle = item.color || options.color;
+      context.fill();
+      angle = end;
+    });
+    context.beginPath();
+    context.arc(centerX, centerY, 30, 0, Math.PI * 2);
+    context.fillStyle = '#ffffff';
+    context.fill();
+    context.fillStyle = '#0b0c0c';
+    context.textAlign = 'center';
+    context.font = '700 24px Arial, sans-serif';
+    context.fillText(String(total), centerX, centerY + 6);
+    context.textAlign = 'left';
+
+    series.forEach(function (item, index) {
+      var rowY = y + 82 + index * 31;
+      var percent = Math.round((item.value / total) * 100);
+      context.fillStyle = item.color || options.color;
+      context.fillRect(x + 232, rowY - 14, 14, 14);
+      context.fillStyle = '#0b0c0c';
+      context.font = '600 16px Arial, sans-serif';
+      context.fillText(item.label, x + 256, rowY - 2);
+      context.textAlign = 'right';
+      context.fillText(options.valueText(item) + ' (' + percent + '%)', x + width - 22, rowY - 2);
+      context.textAlign = 'left';
+    });
+  }
+
   function exportChartsPng() {
     var participants = filteredParticipants();
     var summary = buildStudySummary(participants, filteredCategories());
@@ -482,11 +585,11 @@
     context.fillText(routeLabel(selectedPath()) + ' | ' + plural(summary.participantCount, 'participant'), 54, 95);
     context.fillText('Aggregate summary only. No participant names or written responses are included.', 54, 122);
 
-    drawExportChart(context, 54, 160, 670, 'SUS score distribution', summary.susDistribution, {
+    drawExportDonutChart(context, 54, 160, 670, 'SUS score distribution', summary.susDistribution, {
       color: '#1d70b8',
       valueText: function (item) { return plural(item.value, 'participant'); }
     });
-    drawExportChart(context, 776, 160, 670, 'Study route', summary.routeSplit, {
+    drawExportDonutChart(context, 776, 160, 670, 'Study route', summary.routeSplit, {
       color: '#00703c',
       valueText: function (item) { return plural(item.value, 'participant'); }
     });
