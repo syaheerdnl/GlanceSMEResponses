@@ -165,11 +165,8 @@
       .replace(/'/g, '&#39;');
   }
 
-  function downloadCsv(filename, headers, rows) {
-    var text = [headers.map(csvCell).join(',')].concat(rows.map(function (row) {
-      return row.map(csvCell).join(',');
-    })).join('\r\n');
-    var url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  function downloadBlob(filename, blob) {
+    var url = URL.createObjectURL(blob);
     var link = document.createElement('a');
     link.href = url;
     link.download = filename;
@@ -177,6 +174,13 @@
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  }
+
+  function downloadCsv(filename, headers, rows) {
+    var text = [headers.map(csvCell).join(',')].concat(rows.map(function (row) {
+      return row.map(csvCell).join(',');
+    })).join('\r\n');
+    downloadBlob(filename, new Blob([text], { type: 'text/csv;charset=utf-8' }));
   }
 
   function selectedPath() { return $('researcher-route-filter').value; }
@@ -202,6 +206,117 @@
 
   function formatScore(value) {
     return value === null || value === undefined ? 'Not completed' : Number(value).toFixed(1);
+  }
+
+  function routeLabel(path) {
+    if (path === 'full_sme') return 'Full SME route';
+    if (path === 'sus_only') return 'SUS-only route';
+    return 'All participants';
+  }
+
+  function plural(count, singular, pluralText) {
+    return count + ' ' + (count === 1 ? singular : (pluralText || singular + 's'));
+  }
+
+  // These values are derived only after the allowlisted researcher RPC has
+  // returned. They intentionally contain no participant identity, interview
+  // response, or SUS free-text field, which makes the chart image safe to
+  // use as an aggregate thesis figure when appropriate.
+  function buildStudySummary(participants, categories) {
+    var completedSUS = participants.filter(function (p) { return p.susScore !== null && p.susScore !== undefined; });
+    var scores = completedSUS.map(function (p) { return Number(p.susScore); });
+    var mean = scores.length ? scores.reduce(function (sum, score) { return sum + score; }, 0) / scores.length : null;
+    var handsOnMilestones = [
+      { label: 'Opened', value: participants.filter(function (p) { return !!p.openedAt; }).length },
+      { label: 'Review run', value: participants.filter(function (p) { return !!p.reviewCompletedAt; }).length },
+      { label: 'Feedback opened', value: participants.filter(function (p) { return !!p.feedbackOpenedAt; }).length },
+      { label: 'Fix applied', value: participants.filter(function (p) { return !!p.fixAppliedAt; }).length }
+    ];
+    var summary = {
+      participantCount: participants.length,
+      completedSUS: completedSUS.length,
+      meanSUS: mean,
+      susDistribution: [
+        { label: '0 to 49', value: scores.filter(function (score) { return score < 50; }).length },
+        { label: '50 to 67', value: scores.filter(function (score) { return score >= 50 && score < 68; }).length },
+        { label: '68 to 79', value: scores.filter(function (score) { return score >= 68 && score < 80; }).length },
+        { label: '80 to 100', value: scores.filter(function (score) { return score >= 80; }).length }
+      ],
+      routeSplit: [
+        { label: 'Full SME', value: participants.filter(function (p) { return p.studyPath === 'full_sme'; }).length },
+        { label: 'SUS-only', value: participants.filter(function (p) { return p.studyPath === 'sus_only'; }).length }
+      ],
+      handsOnMilestones: handsOnMilestones,
+      categoryMatch: null
+    };
+
+    if (selectedPath() !== 'sus_only') {
+      var categoryColors = {
+        'Code Quality': '#BF4F4B',
+        Bugs: '#A8791E',
+        Optimization: '#3C7F63',
+        Readability: '#6E63A6'
+      };
+      summary.categoryMatch = ['Code Quality', 'Bugs', 'Optimization', 'Readability'].map(function (name) {
+        var rows = categories.filter(function (row) { return row.aiCategory === name; });
+        var matched = rows.filter(function (row) { return row.guess === row.aiCategory; }).length;
+        return {
+          label: name,
+          value: rows.length ? Math.round((matched / rows.length) * 100) : 0,
+          total: rows.length,
+          matched: matched,
+          color: categoryColors[name]
+        };
+      });
+    }
+    return summary;
+  }
+
+  function renderChartBars(elementId, series, options) {
+    var element = $(elementId);
+    var emptyMessage = options && options.emptyMessage;
+    var color = (options && options.color) || '#00703c';
+    if (!series) {
+      element.innerHTML = '<p class="researcher-chart-empty">' + escapeHtml(emptyMessage || 'Not available for this participant group.') + '</p>';
+      element.setAttribute('aria-label', emptyMessage || 'Not available');
+      return;
+    }
+
+    var max = Math.max.apply(null, series.map(function (item) { return item.value; }).concat([1]));
+    element.innerHTML = series.map(function (item) {
+      var percent = Math.round((item.value / max) * 100);
+      var itemColor = item.color || color;
+      var valueText = options && options.valueText ? options.valueText(item) : String(item.value);
+      return '<div class="researcher-chart-row">' +
+        '<span class="researcher-chart-label">' + escapeHtml(item.label) + '</span>' +
+        '<span class="researcher-chart-track"><span style="background:' + itemColor + ';width:' + percent + '%"></span></span>' +
+        '<strong>' + escapeHtml(valueText) + '</strong>' +
+      '</div>';
+    }).join('');
+    element.setAttribute('aria-label', series.map(function (item) {
+      var valueText = options && options.valueText ? options.valueText(item) : String(item.value);
+      return item.label + ': ' + valueText;
+    }).join('; '));
+  }
+
+  function renderStudyCharts(participants, categories) {
+    var summary = buildStudySummary(participants, categories);
+    renderChartBars('chart-sus-distribution', summary.susDistribution, {
+      color: '#1d70b8',
+      valueText: function (item) { return plural(item.value, 'participant'); }
+    });
+    renderChartBars('chart-route-split', summary.routeSplit, {
+      color: '#00703c',
+      valueText: function (item) { return plural(item.value, 'participant'); }
+    });
+    renderChartBars('chart-hands-on-progress', summary.handsOnMilestones, {
+      color: '#00703c',
+      valueText: function (item) { return item.value + ' / ' + summary.participantCount; }
+    });
+    renderChartBars('chart-category-match', summary.categoryMatch, {
+      emptyMessage: 'Category validation is collected only in the full SME route.',
+      valueText: function (item) { return item.total ? item.value + '% (' + item.matched + '/' + item.total + ')' : 'No responses'; }
+    });
   }
 
   function renderMetrics(participants) {
@@ -254,8 +369,10 @@
 
   function renderDashboard() {
     var participants = filteredParticipants();
+    var categories = filteredCategories();
     renderMetrics(participants);
-    renderCategoryValidation(filteredCategories());
+    renderStudyCharts(participants, categories);
+    renderCategoryValidation(categories);
     renderParticipantTable(participants);
   }
 
@@ -289,7 +406,108 @@
     });
   }
 
+  function summaryRows() {
+    var participants = filteredParticipants();
+    var summary = buildStudySummary(participants, filteredCategories());
+    var rows = [
+      ['participant_group', routeLabel(selectedPath())],
+      ['participant_records', summary.participantCount],
+      ['completed_sus', summary.completedSUS],
+      ['mean_sus_score', summary.meanSUS === null ? '' : summary.meanSUS.toFixed(1)]
+    ];
+    summary.susDistribution.forEach(function (item) { rows.push(['sus_score_' + item.label.replace(/ /g, '_'), item.value]); });
+    summary.routeSplit.forEach(function (item) { rows.push(['route_' + item.label.toLowerCase().replace(/[^a-z]+/g, '_'), item.value]); });
+    summary.handsOnMilestones.forEach(function (item) { rows.push(['hands_on_' + item.label.toLowerCase().replace(/[^a-z]+/g, '_'), item.value]); });
+    if (summary.categoryMatch) {
+      summary.categoryMatch.forEach(function (item) {
+        rows.push(['category_match_' + item.label.toLowerCase().replace(/[^a-z]+/g, '_'), item.value + '% (' + item.matched + '/' + item.total + ')']);
+      });
+    } else {
+      rows.push(['category_match', 'Not collected for SUS-only participants']);
+    }
+    return rows;
+  }
+
+  function drawExportChart(context, x, y, width, title, series, options) {
+    var height = 230;
+    context.strokeStyle = '#b1b4b6';
+    context.lineWidth = 2;
+    context.strokeRect(x, y, width, height);
+    context.fillStyle = '#0b0c0c';
+    context.font = '700 24px Arial, sans-serif';
+    context.fillText(title, x + 22, y + 35);
+
+    if (!series) {
+      context.fillStyle = '#505a5f';
+      context.font = '18px Arial, sans-serif';
+      context.fillText(options.emptyMessage, x + 22, y + 85);
+      return;
+    }
+
+    var max = Math.max.apply(null, series.map(function (item) { return item.value; }).concat([1]));
+    var labelWidth = 155;
+    var trackWidth = width - labelWidth - 118;
+    series.forEach(function (item, index) {
+      var rowY = y + 72 + index * 34;
+      var barWidth = Math.round((item.value / max) * trackWidth);
+      context.fillStyle = '#e8e8e8';
+      context.fillRect(x + labelWidth, rowY - 15, trackWidth, 16);
+      context.fillStyle = item.color || options.color;
+      context.fillRect(x + labelWidth, rowY - 15, barWidth, 16);
+      context.fillStyle = '#0b0c0c';
+      context.font = '600 16px Arial, sans-serif';
+      context.fillText(item.label, x + 22, rowY - 2);
+      context.textAlign = 'right';
+      context.fillText(options.valueText(item), x + width - 22, rowY - 2);
+      context.textAlign = 'left';
+    });
+  }
+
+  function exportChartsPng() {
+    var participants = filteredParticipants();
+    var summary = buildStudySummary(participants, filteredCategories());
+    var canvas = document.createElement('canvas');
+    canvas.width = 1500;
+    canvas.height = 760;
+    var context = canvas.getContext('2d');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#0b0c0c';
+    context.font = '700 38px Arial, sans-serif';
+    context.fillText('Glance study results', 54, 62);
+    context.fillStyle = '#505a5f';
+    context.font = '20px Arial, sans-serif';
+    context.fillText(routeLabel(selectedPath()) + ' | ' + plural(summary.participantCount, 'participant'), 54, 95);
+    context.fillText('Aggregate summary only. No participant names or written responses are included.', 54, 122);
+
+    drawExportChart(context, 54, 160, 670, 'SUS score distribution', summary.susDistribution, {
+      color: '#1d70b8',
+      valueText: function (item) { return plural(item.value, 'participant'); }
+    });
+    drawExportChart(context, 776, 160, 670, 'Study route', summary.routeSplit, {
+      color: '#00703c',
+      valueText: function (item) { return plural(item.value, 'participant'); }
+    });
+    drawExportChart(context, 54, 440, 670, 'Hands-on task progress', summary.handsOnMilestones, {
+      color: '#00703c',
+      valueText: function (item) { return item.value + ' / ' + summary.participantCount; }
+    });
+    drawExportChart(context, 776, 440, 670, 'Blind category match', summary.categoryMatch, {
+      color: '#00703c',
+      emptyMessage: 'Category validation is collected only in the full SME route.',
+      valueText: function (item) { return item.total ? item.value + '% (' + item.matched + '/' + item.total + ')' : 'No responses'; }
+    });
+
+    canvas.toBlob(function (blob) {
+      if (blob) downloadBlob('glance-study-summary.png', blob);
+    }, 'image/png');
+  }
+
   function initExports() {
+    $('btn-export-summary').addEventListener('click', function () {
+      downloadCsv('glance-study-summary.csv', ['metric', 'value'], summaryRows());
+    });
+    $('btn-export-charts').addEventListener('click', exportChartsPng);
     $('btn-export-participants').addEventListener('click', function () {
       downloadCsv('glance-participants.csv', ['participant_name', 'participant_id', 'study_path', 'created_at', 'years_experience', 'platforms', 'role', 'language_familiarity', 'consented_at', 'sus_score', 'opened_at', 'review_completed_at', 'feedback_opened_at', 'fix_applied_at'], participantRows());
     });

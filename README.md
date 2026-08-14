@@ -32,7 +32,7 @@ if you'd rather begin fresh.
 | `index.html` | The page structure |
 | `style.css` | Styling |
 | `app.js` | All the client-side logic (section flow, validation, talking to the backend) |
-| `researcher.html` / `researcher.js` | Private results dashboard and CSV exports, protected by a Supabase Auth email sign-in link |
+| `researcher.html` / `researcher.js` | Private results dashboard, aggregate charts, and CSV/PNG exports, protected by Supabase Auth password sign-in |
 | `config.js` | **Edit this** — holds the Supabase project URL and anon (public) key |
 | `supabase/migration.sql` | The backend — run this once in your Supabase project's SQL Editor |
 | `supabase/003_add_hands_on_task.sql` | Incremental migration for an already-live study project |
@@ -76,7 +76,7 @@ The public study footer links to `researcher.html`, but knowing that URL does no
 1. Run the current `supabase/007_add_shared_background_and_identity.sql` in the Supabase SQL Editor after migrations 003, 004, and 005. It includes the dashboard allowlist and protected dashboard function; it also supersedes the dashboard function from migration 006. If the old 007 is already in your database, run `008_make_sus_background_route_specific.sql` next.
 2. In **Authentication > Providers**, ensure the Email provider is enabled for password sign-in.
 3. Open the live study page and select **Researcher results**. If this is the first password setup, choose **email me a one-time setup link**, open it in the same browser, then use the protected dashboard’s **Researcher sign-in password** panel to set a strong 12-character-or-longer password. Do not put it in source code or share it with participants.
-4. For all future access, enter that password and select **Sign in to results**. The dashboard then provides the combined participant overview and route-filtered CSV exports without sending another email.
+4. For all future access, enter that password and select **Sign in to results**. The dashboard then provides the combined participant overview, route-filtered CSV exports, four aggregate charts, a Summary CSV, and a downloadable charts PNG without sending another email. The summary exports contain no names, interview notes, or SUS free-text feedback.
 
 Do not replace this with a browser PIN. A browser PIN can be read from public JavaScript, while the dashboard here is protected by a Supabase Auth session and a server-side email allowlist.
 
