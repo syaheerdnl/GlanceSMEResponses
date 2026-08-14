@@ -249,6 +249,7 @@ await shot('real-0-cover.png');
 await page.click('#btn-cover-start');
 await page.waitForSelector('#section-consent.active');
 assert(await page.locator('#stepper.hidden').count() === 1, 'stepper remains hidden while consent is considered');
+assert((await page.textContent('#section-consent')).includes('Consent version: SME-web-consent-v4'), 'consent page displays the same current version recorded by the consent RPC');
 await shot('real-0b-consent.png');
 await page.click('#btn-consent-continue');
 assert(await page.locator('#consent-error:not(.hidden)').count() === 1, 'blocks continuing without explicit consent');
